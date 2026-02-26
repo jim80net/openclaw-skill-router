@@ -1,0 +1,20 @@
+{
+  "name": "@openclaw/skill-router",
+  "version": "0.1.0",
+  "description": "Vector-based skill router for OpenClaw — injects relevant skills per-turn using embedding similarity",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -2,6 +2,24 @@
   "name": "@openclaw/skill-router",
   "version": "0.1.0",
   "description": "Vector-based skill router for OpenClaw — injects relevant skills per-turn using embedding similarity",
+  "license": "MIT",
+  "author": "General-ML",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/General-ML/openclaw-skill-router.git"
+  },
+  "homepage": "https://github.com/General-ML/openclaw-skill-router#readme",
+  "bugs": {
+    "url": "https://github.com/General-ML/openclaw-skill-router/issues"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "skill-router",
+    "vector-search",
+    "embeddings",
+    "rag"
+  ],
   "type": "module",
   "openclaw": {
     "extensions": [

@@ -1,6 +1,9 @@
 import { resolveConfig } from "./config.ts";
 import { SkillIndex } from "./skill-index.ts";
 import { createRouter } from "./router.ts";
+import { SessionTracker } from "./session.ts";
+import { OpenAIEmbeddingProvider, LocalEmbeddingProvider } from "./embeddings.ts";
+import type { EmbeddingProvider } from "./embeddings.ts";
 
 type OpenClawConfig = {
   workspace?: {
@@ -23,7 +26,7 @@ type OpenClawPluginApi = {
   on: (
     event: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    handler: (event: any, context: any) => unknown,
+    handler: (...args: any[]) => unknown,
     opts?: unknown
   ) => void;
   registerService: (service: { id: string; start: () => Promise<void>; stop: () => void }) => void;
@@ -37,14 +40,23 @@ export default function register(api: OpenClawPluginApi): void {
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY ?? "";
-  if (!apiKey) {
-    api.logger.warn("Skill router: no OPENAI_API_KEY found, disabling");
-    return;
+  // Create embedding provider based on config
+  let provider: EmbeddingProvider;
+  if (config.embeddingBackend === "local") {
+    provider = new LocalEmbeddingProvider(config.embeddingModel);
+    api.logger.info(`Skill router: using local ONNX embeddings (${config.embeddingModel})`);
+  } else {
+    const apiKey = process.env.OPENAI_API_KEY ?? "";
+    if (!apiKey) {
+      api.logger.warn("Skill router: no OPENAI_API_KEY found, disabling");
+      return;
+    }
+    provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
   }
 
-  const index = new SkillIndex(config, apiKey);
-  const router = createRouter(index, config, api.logger);
+  const index = new SkillIndex(config, provider);
+  const sessionTracker = new SessionTracker();
+  const router = createRouter(index, config, api.logger, sessionTracker);
 
   api.on("before_prompt_build", router);
 

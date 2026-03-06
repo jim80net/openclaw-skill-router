@@ -91,7 +91,8 @@ describe("createRouter", () => {
         name: "weather",
         description: "Get weather",
         location: "/fake/skills/weather/SKILL.md",
-        embedding: [],
+        embeddings: [],
+        queries: [],
       },
       score: 0.92,
     };
@@ -116,11 +117,11 @@ describe("createRouter", () => {
 
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "skill-a", description: "A", location: "/a/SKILL.md", embedding: [] },
+        skill: { name: "skill-a", description: "A", location: "/a/SKILL.md", embeddings: [], queries: [] },
         score: 0.9,
       },
       {
-        skill: { name: "skill-b", description: "B", location: "/b/SKILL.md", embedding: [] },
+        skill: { name: "skill-b", description: "B", location: "/b/SKILL.md", embeddings: [], queries: [] },
         score: 0.8,
       },
     ];
@@ -148,7 +149,7 @@ describe("createRouter", () => {
     const content = "some content";
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "weather", description: "W", location: "/w/SKILL.md", embedding: [] },
+        skill: { name: "weather", description: "W", location: "/w/SKILL.md", embeddings: [], queries: [] },
         score: 0.88,
       },
     ];
@@ -200,11 +201,11 @@ describe("createRouter", () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "bad-skill", description: "bad", location: "/bad/SKILL.md", embedding: [] },
+        skill: { name: "bad-skill", description: "bad", location: "/bad/SKILL.md", embeddings: [], queries: [] },
         score: 0.9,
       },
       {
-        skill: { name: "good-skill", description: "good", location: "/good/SKILL.md", embedding: [] },
+        skill: { name: "good-skill", description: "good", location: "/good/SKILL.md", embeddings: [], queries: [] },
         score: 0.85,
       },
     ];
@@ -229,7 +230,7 @@ describe("createRouter", () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
       {
-        skill: { name: "bad", description: "bad", location: "/bad/SKILL.md", embedding: [] },
+        skill: { name: "bad", description: "bad", location: "/bad/SKILL.md", embeddings: [], queries: [] },
         score: 0.9,
       },
     ];

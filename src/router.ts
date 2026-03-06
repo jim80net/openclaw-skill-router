@@ -31,6 +31,10 @@ export function createRouter(
   return async (event: HookEvent, context: HookContext): Promise<HookResult> => {
     if (!config.enabled) return undefined;
 
+    // Skip heartbeat turns — the prompt contains HEARTBEAT_OK for both
+    // the built-in heartbeat and cron jobs that use the heartbeat ack pattern
+    if (event.prompt.includes("HEARTBEAT_OK")) return undefined;
+
     // Rebuild index if stale
     if (index.needsRebuild() && context.workspaceDir) {
       try {
@@ -68,7 +72,7 @@ export function createRouter(
       if (totalChars + content.length > config.maxInjectedChars) break;
 
       sections.push(
-        `## Auto-loaded Skill: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n${content}`
+        `## Auto-loaded Skill: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n**${result.skill.name}**: ${result.skill.description}\n\n${content}`
       );
       totalChars += content.length;
     }

@@ -17,7 +17,9 @@
         "type": "array",
         "items": { "type": "string" },
         "description": "Additional skill directories to index (workspace skills/ is always included)"
-      }
+      },
+      "syntheticQueryCount": { "type": "number", "default": 5, "minimum": 1, "maximum": 20 },
+      "queryModel": { "type": "string", "default": "gpt-4.1-nano" }
     }
   },
   "uiHints": {
@@ -25,6 +27,8 @@
     "topK": { "label": "Max skills to inject per turn" },
     "threshold": { "label": "Minimum similarity score (0-1)" },
     "embeddingModel": { "label": "Embedding model" },
-    "maxInjectedChars": { "label": "Max characters to inject" }
+    "maxInjectedChars": { "label": "Max characters to inject" },
+    "syntheticQueryCount": { "label": "Synthetic queries per skill" },
+    "queryModel": { "label": "Query generation model" }
   }
 }

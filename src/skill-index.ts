@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { embedTexts, cosineSimilarity } from "./embeddings.ts";
@@ -8,7 +8,8 @@ export type IndexedSkill = {
   name: string;
   description: string;
   location: string; // Path to SKILL.md
-  embedding: number[];
+  embeddings: number[][];
+  queries: string[];
 };
 
 export type SkillSearchResult = {
@@ -19,6 +20,7 @@ export type SkillSearchResult = {
 type ParsedFrontmatter = {
   name?: string;
   description?: string;
+  queries?: string[];
 };
 
 function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: string } {
@@ -28,18 +30,31 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
   const frontmatter = match[1];
   const body = match[2];
   const meta: ParsedFrontmatter = {};
+  const queries: string[] = [];
+  let inQueriesBlock = false;
 
   for (const line of frontmatter.split(/\r?\n/)) {
+    if (inQueriesBlock) {
+      const listItem = line.match(/^\s+-\s+(.*)/);
+      if (listItem) {
+        queries.push(listItem[1].replace(/^["']|["']$/g, "").trim());
+        continue;
+      }
+      inQueriesBlock = false;
+    }
+
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
     const rawValue = line.slice(colonIdx + 1).trim();
-    // Strip surrounding quotes
     const value = rawValue.replace(/^["']|["']$/g, "");
+
     if (key === "name") meta.name = value;
     if (key === "description") meta.description = value;
+    if (key === "queries" && rawValue === "") inQueriesBlock = true;
   }
 
+  if (queries.length > 0) meta.queries = queries;
   return { meta, body };
 }
 
@@ -51,14 +66,13 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
     try {
       entries = await readdir(dir);
     } catch {
-      // Directory may not exist — skip silently
       continue;
     }
 
     for (const entry of entries) {
       const skillMd = join(dir, entry, "SKILL.md");
       try {
-        await readFile(skillMd); // Check existence
+        await readFile(skillMd);
         skillFiles.push(skillMd);
       } catch {
         // No SKILL.md in this subdirectory
@@ -72,6 +86,7 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
 export class SkillIndex {
   private skills: IndexedSkill[] = [];
   private buildTime: number = 0;
+  private skillMtimes: Map<string, number> = new Map();
 
   constructor(
     private config: SkillRouterConfig,
@@ -97,44 +112,78 @@ export class SkillIndex {
     }
 
     const skillFiles = await scanSkillDirs(dirsToScan);
-    if (skillFiles.length === 0) {
-      this.skills = [];
-      this.buildTime = Date.now();
+
+    // Stat all files to detect changes
+    const statResults = await Promise.all(
+      skillFiles.map(async (location) => {
+        const s = await stat(location);
+        return { location, mtime: s.mtimeMs };
+      })
+    );
+
+    // Early return if nothing has changed
+    const currentLocations = new Set(statResults.map((s) => s.location));
+    const anyNew = statResults.some((s) => !this.skillMtimes.has(s.location));
+    const anyChanged = statResults.some((s) => this.skillMtimes.get(s.location) !== s.mtime);
+    const anyDeleted = [...this.skillMtimes.keys()].some((loc) => !currentLocations.has(loc));
+
+    if (this.buildTime > 0 && !anyNew && !anyChanged && !anyDeleted) {
+      this.buildTime = Date.now(); // reset TTL
       return;
     }
 
-    // Read and parse all SKILL.md files
-    const parsed: Array<{ name: string; description: string; location: string }> = [];
-    for (const location of skillFiles) {
+    // Parse skills that are new or changed
+    type ParsedSkill = { name: string; description: string; location: string; queries: string[] };
+    const toEmbed: ParsedSkill[] = [];
+
+    for (const { location, mtime } of statResults) {
+      const unchanged =
+        this.skillMtimes.get(location) === mtime &&
+        this.skills.some((s) => s.location === location);
+      if (unchanged) continue;
+
       try {
         const raw = await readFile(location, "utf-8");
         const { meta } = parseFrontmatter(raw);
         if (!meta.name || !meta.description) continue;
-        parsed.push({ name: meta.name, description: meta.description, location });
+        // Use frontmatter queries if present, fall back to description
+        const queries = meta.queries?.length ? meta.queries : [meta.description];
+        toEmbed.push({ name: meta.name, description: meta.description, location, queries });
       } catch {
         // Skip unreadable files
       }
     }
 
-    if (parsed.length === 0) {
-      this.skills = [];
-      this.buildTime = Date.now();
-      return;
+    // Embed new/changed skills in one batch call
+    if (toEmbed.length > 0) {
+      const flatQueries = toEmbed.flatMap((p) => p.queries);
+      const flatEmbeddings = await embedTexts(flatQueries, {
+        model: this.config.embeddingModel,
+        apiKey: this.apiKey,
+      });
+
+      let offset = 0;
+      for (const p of toEmbed) {
+        const embeddings = flatEmbeddings.slice(offset, offset + p.queries.length);
+        const skill: IndexedSkill = {
+          name: p.name,
+          description: p.description,
+          location: p.location,
+          embeddings,
+          queries: p.queries,
+        };
+        const existing = this.skills.findIndex((s) => s.location === p.location);
+        if (existing >= 0) this.skills[existing] = skill;
+        else this.skills.push(skill);
+        offset += p.queries.length;
+      }
     }
 
-    // Embed all descriptions in one batch call
-    const descriptions = parsed.map((p) => p.description);
-    const embeddings = await embedTexts(descriptions, {
-      model: this.config.embeddingModel,
-      apiKey: this.apiKey,
-    });
+    // Remove deleted skills
+    this.skills = this.skills.filter((s) => currentLocations.has(s.location));
 
-    this.skills = parsed.map((p, i) => ({
-      name: p.name,
-      description: p.description,
-      location: p.location,
-      embedding: embeddings[i],
-    }));
+    // Update mtime tracking
+    this.skillMtimes = new Map(statResults.map((s) => [s.location, s.mtime]));
 
     this.buildTime = Date.now();
   }
@@ -147,10 +196,11 @@ export class SkillIndex {
       apiKey: this.apiKey,
     });
 
-    const scored = this.skills.map((skill) => ({
-      skill,
-      score: cosineSimilarity(queryEmbedding, skill.embedding),
-    }));
+    const scored = this.skills.map((skill) => {
+      const similarities = skill.embeddings.map((e) => cosineSimilarity(queryEmbedding, e));
+      const score = similarities.reduce((sum, s) => sum + s, 0) / similarities.length;
+      return { skill, score };
+    });
 
     return scored
       .filter((r) => r.score >= threshold)

@@ -1,27 +1,16 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { embedTexts, cosineSimilarity } from "./embeddings.ts";
+import { cosineSimilarity } from "./embeddings.ts";
+import type { EmbeddingProvider } from "./embeddings.ts";
 import type { SkillRouterConfig } from "./config.ts";
+import type { IndexedSkill, SkillSearchResult, SkillType, ParsedFrontmatter } from "./types.ts";
 
-export type IndexedSkill = {
-  name: string;
-  description: string;
-  location: string; // Path to SKILL.md
-  embeddings: number[][];
-  queries: string[];
-};
+// ---------------------------------------------------------------------------
+// Frontmatter parsing
+// ---------------------------------------------------------------------------
 
-export type SkillSearchResult = {
-  skill: IndexedSkill;
-  score: number;
-};
-
-type ParsedFrontmatter = {
-  name?: string;
-  description?: string;
-  queries?: string[];
-};
+const LIST_KEYS = new Set(["queries", "paths", "hooks", "keywords"]);
 
 function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: string } {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
@@ -30,17 +19,21 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
   const frontmatter = match[1];
   const body = match[2];
   const meta: ParsedFrontmatter = {};
-  const queries: string[] = [];
-  let inQueriesBlock = false;
+
+  let currentListKey = "";
+  const listAccumulators: Record<string, string[]> = {};
 
   for (const line of frontmatter.split(/\r?\n/)) {
-    if (inQueriesBlock) {
+    // Continue accumulating list items
+    if (currentListKey) {
       const listItem = line.match(/^\s+-\s+(.*)/);
       if (listItem) {
-        queries.push(listItem[1].replace(/^["']|["']$/g, "").trim());
+        listAccumulators[currentListKey].push(
+          listItem[1].replace(/^["']|["']$/g, "").trim()
+        );
         continue;
       }
-      inQueriesBlock = false;
+      currentListKey = "";
     }
 
     const colonIdx = line.indexOf(":");
@@ -49,14 +42,30 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
     const rawValue = line.slice(colonIdx + 1).trim();
     const value = rawValue.replace(/^["']|["']$/g, "");
 
+    // Scalar keys
     if (key === "name") meta.name = value;
     if (key === "description") meta.description = value;
-    if (key === "queries" && rawValue === "") inQueriesBlock = true;
+    if (key === "type") meta.type = value as SkillType;
+    if (key === "one-liner") meta.oneLiner = value;
+
+    // List keys — start accumulating if value is empty (block list)
+    if (LIST_KEYS.has(key) && rawValue === "") {
+      currentListKey = key;
+      listAccumulators[key] = [];
+    }
   }
 
-  if (queries.length > 0) meta.queries = queries;
+  if (listAccumulators.queries?.length) meta.queries = listAccumulators.queries;
+  if (listAccumulators.paths?.length) meta.paths = listAccumulators.paths;
+  if (listAccumulators.hooks?.length) meta.hooks = listAccumulators.hooks;
+  if (listAccumulators.keywords?.length) meta.keywords = listAccumulators.keywords;
+
   return { meta, body };
 }
+
+// ---------------------------------------------------------------------------
+// Directory scanning
+// ---------------------------------------------------------------------------
 
 async function scanSkillDirs(dirs: string[]): Promise<string[]> {
   const skillFiles: string[] = [];
@@ -83,6 +92,10 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
   return skillFiles;
 }
 
+// ---------------------------------------------------------------------------
+// SkillIndex
+// ---------------------------------------------------------------------------
+
 export class SkillIndex {
   private skills: IndexedSkill[] = [];
   private buildTime: number = 0;
@@ -90,7 +103,7 @@ export class SkillIndex {
 
   constructor(
     private config: SkillRouterConfig,
-    private apiKey: string
+    private provider: EmbeddingProvider
   ) {}
 
   get skillCount(): number {
@@ -124,8 +137,12 @@ export class SkillIndex {
     // Early return if nothing has changed
     const currentLocations = new Set(statResults.map((s) => s.location));
     const anyNew = statResults.some((s) => !this.skillMtimes.has(s.location));
-    const anyChanged = statResults.some((s) => this.skillMtimes.get(s.location) !== s.mtime);
-    const anyDeleted = [...this.skillMtimes.keys()].some((loc) => !currentLocations.has(loc));
+    const anyChanged = statResults.some(
+      (s) => this.skillMtimes.get(s.location) !== s.mtime
+    );
+    const anyDeleted = [...this.skillMtimes.keys()].some(
+      (loc) => !currentLocations.has(loc)
+    );
 
     if (this.buildTime > 0 && !anyNew && !anyChanged && !anyDeleted) {
       this.buildTime = Date.now(); // reset TTL
@@ -133,7 +150,14 @@ export class SkillIndex {
     }
 
     // Parse skills that are new or changed
-    type ParsedSkill = { name: string; description: string; location: string; queries: string[] };
+    type ParsedSkill = {
+      name: string;
+      description: string;
+      location: string;
+      queries: string[];
+      type: SkillType;
+      oneLiner?: string;
+    };
     const toEmbed: ParsedSkill[] = [];
 
     for (const { location, mtime } of statResults) {
@@ -146,9 +170,16 @@ export class SkillIndex {
         const raw = await readFile(location, "utf-8");
         const { meta } = parseFrontmatter(raw);
         if (!meta.name || !meta.description) continue;
-        // Use frontmatter queries if present, fall back to description
         const queries = meta.queries?.length ? meta.queries : [meta.description];
-        toEmbed.push({ name: meta.name, description: meta.description, location, queries });
+        const type: SkillType = meta.type ?? "skill";
+        toEmbed.push({
+          name: meta.name,
+          description: meta.description,
+          location,
+          queries,
+          type,
+          oneLiner: meta.oneLiner,
+        });
       } catch {
         // Skip unreadable files
       }
@@ -157,10 +188,7 @@ export class SkillIndex {
     // Embed new/changed skills in one batch call
     if (toEmbed.length > 0) {
       const flatQueries = toEmbed.flatMap((p) => p.queries);
-      const flatEmbeddings = await embedTexts(flatQueries, {
-        model: this.config.embeddingModel,
-        apiKey: this.apiKey,
-      });
+      const flatEmbeddings = await this.provider.embed(flatQueries);
 
       let offset = 0;
       for (const p of toEmbed) {
@@ -169,8 +197,10 @@ export class SkillIndex {
           name: p.name,
           description: p.description,
           location: p.location,
+          type: p.type,
           embeddings,
           queries: p.queries,
+          oneLiner: p.oneLiner,
         };
         const existing = this.skills.findIndex((s) => s.location === p.location);
         if (existing >= 0) this.skills[existing] = skill;
@@ -188,17 +218,26 @@ export class SkillIndex {
     this.buildTime = Date.now();
   }
 
-  async search(query: string, topK: number, threshold: number): Promise<SkillSearchResult[]> {
-    if (this.skills.length === 0) return [];
+  async search(
+    query: string,
+    topK: number,
+    threshold: number,
+    typeFilter?: SkillType[]
+  ): Promise<SkillSearchResult[]> {
+    let candidates = this.skills;
+    if (typeFilter && typeFilter.length > 0) {
+      const allowed = new Set(typeFilter);
+      candidates = candidates.filter((s) => allowed.has(s.type));
+    }
 
-    const [queryEmbedding] = await embedTexts([query], {
-      model: this.config.embeddingModel,
-      apiKey: this.apiKey,
-    });
+    if (candidates.length === 0) return [];
 
-    const scored = this.skills.map((skill) => {
+    const [queryEmbedding] = await this.provider.embed([query]);
+
+    const scored = candidates.map((skill) => {
       const similarities = skill.embeddings.map((e) => cosineSimilarity(queryEmbedding, e));
-      const score = similarities.reduce((sum, s) => sum + s, 0) / similarities.length;
+      // Use max instead of avg — a single strong match should surface the skill
+      const score = Math.max(...similarities);
       return { skill, score };
     });
 
@@ -215,5 +254,6 @@ export class SkillIndex {
   }
 }
 
-// Export parseFrontmatter for testing
+// Export for testing
 export { parseFrontmatter };
+export type { ParsedFrontmatter };

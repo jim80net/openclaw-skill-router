@@ -2,6 +2,9 @@ import type { SkillIndex } from "./skill-index.ts";
 import type { SkillRouterConfig } from "./config.ts";
 import type { SessionTracker } from "./session.ts";
 import type { IndexedSkill } from "./types.ts";
+import type { TraceAccumulator } from "./traces.ts";
+import { extractUserMessage } from "./prompt-extractor.ts";
+import { loadTelemetry, saveTelemetry, recordMatch } from "./telemetry.ts";
 
 export type PluginLogger = {
   info: (msg: string) => void;
@@ -62,13 +65,17 @@ export function createRouter(
   index: SkillIndex,
   config: SkillRouterConfig,
   logger: PluginLogger,
-  sessionTracker: SessionTracker
+  sessionTracker: SessionTracker,
+  traceAccumulator?: TraceAccumulator
 ) {
   return async (event: HookEvent, context: HookContext): Promise<HookResult> => {
     if (!config.enabled) return undefined;
 
-    // Skip heartbeat turns
-    if (event.prompt.includes("HEARTBEAT_OK")) return undefined;
+    // Extract the user's actual message from OpenClaw's envelope
+    const userMessage = extractUserMessage(event.prompt);
+
+    // Skip heartbeat turns and empty messages
+    if (userMessage.includes("HEARTBEAT_OK") || userMessage.length < 5) return undefined;
 
     // Rebuild index if stale
     if (index.needsRebuild() && context.workspaceDir) {
@@ -80,11 +87,11 @@ export function createRouter(
       }
     }
 
-    // Search for matching skills, filtered by configured types
+    // Search for matching skills using cleaned message
     let results;
     try {
       results = await index.search(
-        event.prompt,
+        userMessage,
         config.topK,
         config.threshold,
         config.types
@@ -96,12 +103,14 @@ export function createRouter(
 
     if (results.length === 0) return undefined;
 
+    const sessionKey = context.sessionKey ?? "";
     const sessionId = context.sessionId ?? "";
 
     // Assemble content with type-specific disclosure
     let totalChars = 0;
     const sections: string[] = [];
     const counts = { rules: 0, memories: 0, skills: 0 };
+    const injectedNames: string[] = [];
 
     for (const result of results) {
       const { skill, score } = result;
@@ -111,10 +120,8 @@ export function createRouter(
 
       if (skill.type === "rule") {
         if (sessionId && sessionTracker.hasRuleBeenShown(sessionId, skill.location)) {
-          // Subsequent match: one-liner reminder
           section = formatRule(skill, relevance, "", true);
         } else {
-          // First match: full content
           let content: string;
           try {
             content = await index.readSkillContent(skill.location);
@@ -129,7 +136,6 @@ export function createRouter(
         }
         counts.rules++;
       } else if (skill.type === "memory" || skill.type === "session-learning") {
-        // Memories: always inject full body
         let content: string;
         try {
           content = await index.readSkillContent(skill.location);
@@ -140,7 +146,6 @@ export function createRouter(
         section = formatMemory(skill, relevance, content);
         counts.memories++;
       } else {
-        // Skills, workflows, tool-guidance: teaser only
         section = formatSkillTeaser(skill, relevance);
         counts.skills++;
       }
@@ -148,6 +153,7 @@ export function createRouter(
       if (totalChars + section.length > config.maxInjectedChars) break;
 
       sections.push(section);
+      injectedNames.push(skill.name);
       totalChars += section.length;
     }
 
@@ -170,8 +176,31 @@ export function createRouter(
     if (counts.memories > 0)
       parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
     logger.info(
-      `Skill router: injected ${parts.join(" + ")} (${totalChars} chars)`
+      `Skill router: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`
     );
+
+    // Record telemetry (fire-and-forget)
+    if (sessionKey) {
+      loadTelemetry()
+        .then((telemetry) => {
+          for (const result of results) {
+            recordMatch(telemetry, result.skill.location, sessionKey);
+          }
+          return saveTelemetry(telemetry);
+        })
+        .catch(() => {
+          // Telemetry is best-effort
+        });
+    }
+
+    // Record trace data
+    if (traceAccumulator && sessionKey) {
+      traceAccumulator.recordInjection(
+        sessionKey,
+        context.agentId ?? "unknown",
+        injectedNames
+      );
+    }
 
     return { prependContext };
   };

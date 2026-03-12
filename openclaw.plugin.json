@@ -2,7 +2,7 @@
   "id": "skill-router",
   "name": "Skill Router",
   "description": "Vector-based skill router that injects relevant skills per-turn using embedding similarity search with graduated disclosure",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

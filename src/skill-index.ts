@@ -5,6 +5,8 @@ import { cosineSimilarity } from "./embeddings.ts";
 import type { EmbeddingProvider } from "./embeddings.ts";
 import type { SkillRouterConfig } from "./config.ts";
 import type { IndexedSkill, SkillSearchResult, SkillType, ParsedFrontmatter } from "./types.ts";
+import { loadCache, saveCache, toCachedSkill, fromCachedSkill } from "./cache.ts";
+import type { CacheData } from "./cache.ts";
 
 // ---------------------------------------------------------------------------
 // Frontmatter parsing
@@ -24,7 +26,6 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
   const listAccumulators: Record<string, string[]> = {};
 
   for (const line of frontmatter.split(/\r?\n/)) {
-    // Continue accumulating list items
     if (currentListKey) {
       const listItem = line.match(/^\s+-\s+(.*)/);
       if (listItem) {
@@ -42,13 +43,11 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
     const rawValue = line.slice(colonIdx + 1).trim();
     const value = rawValue.replace(/^["']|["']$/g, "");
 
-    // Scalar keys
     if (key === "name") meta.name = value;
     if (key === "description") meta.description = value;
     if (key === "type") meta.type = value as SkillType;
     if (key === "one-liner") meta.oneLiner = value;
 
-    // List keys — start accumulating if value is empty (block list)
     if (LIST_KEYS.has(key) && rawValue === "") {
       currentListKey = key;
       listAccumulators[key] = [];
@@ -84,7 +83,7 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
         await readFile(skillMd);
         skillFiles.push(skillMd);
       } catch {
-        // No SKILL.md in this subdirectory
+        // No SKILL.md
       }
     }
   }
@@ -93,13 +92,15 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
-// SkillIndex
+// SkillIndex (with persistent cache)
 // ---------------------------------------------------------------------------
 
 export class SkillIndex {
   private skills: IndexedSkill[] = [];
   private buildTime: number = 0;
   private skillMtimes: Map<string, number> = new Map();
+  private cacheLoaded: boolean = false;
+  private cache: CacheData | null = null;
 
   constructor(
     private config: SkillRouterConfig,
@@ -116,6 +117,20 @@ export class SkillIndex {
   }
 
   async build(workspaceDir: string): Promise<void> {
+    // Load persistent cache on first build
+    if (!this.cacheLoaded) {
+      this.cache = await loadCache(this.config.embeddingModel);
+      this.cacheLoaded = true;
+
+      // Hydrate from cache on cold start
+      if (this.skills.length === 0 && Object.keys(this.cache.skills).length > 0) {
+        for (const [location, cached] of Object.entries(this.cache.skills)) {
+          this.skills.push(fromCachedSkill(location, cached));
+          this.skillMtimes.set(location, cached.mtime);
+        }
+      }
+    }
+
     const managedSkillsDir = join(homedir(), ".openclaw", "workspace", "skills");
     const workspaceSkillsDir = join(workspaceDir, "skills");
 
@@ -126,7 +141,7 @@ export class SkillIndex {
 
     const skillFiles = await scanSkillDirs(dirsToScan);
 
-    // Stat all files to detect changes
+    // Stat all files
     const statResults = await Promise.all(
       skillFiles.map(async (location) => {
         const s = await stat(location);
@@ -134,7 +149,7 @@ export class SkillIndex {
       })
     );
 
-    // Early return if nothing has changed
+    // Check for changes
     const currentLocations = new Set(statResults.map((s) => s.location));
     const anyNew = statResults.some((s) => !this.skillMtimes.has(s.location));
     const anyChanged = statResults.some(
@@ -145,11 +160,11 @@ export class SkillIndex {
     );
 
     if (this.buildTime > 0 && !anyNew && !anyChanged && !anyDeleted) {
-      this.buildTime = Date.now(); // reset TTL
+      this.buildTime = Date.now();
       return;
     }
 
-    // Parse skills that are new or changed
+    // Parse skills that need (re)embedding
     type ParsedSkill = {
       name: string;
       description: string;
@@ -157,10 +172,24 @@ export class SkillIndex {
       queries: string[];
       type: SkillType;
       oneLiner?: string;
+      mtime: number;
     };
     const toEmbed: ParsedSkill[] = [];
 
     for (const { location, mtime } of statResults) {
+      // Check if cache has a valid entry
+      const cached = this.cache?.skills[location];
+      if (cached && cached.mtime === mtime) {
+        // Use cached embeddings — skip re-embedding
+        const existing = this.skills.findIndex((s) => s.location === location);
+        const skill = fromCachedSkill(location, cached);
+        if (existing >= 0) this.skills[existing] = skill;
+        else if (!this.skills.some((s) => s.location === location)) this.skills.push(skill);
+        this.skillMtimes.set(location, mtime);
+        continue;
+      }
+
+      // Check in-memory cache
       const unchanged =
         this.skillMtimes.get(location) === mtime &&
         this.skills.some((s) => s.location === location);
@@ -179,13 +208,14 @@ export class SkillIndex {
           queries,
           type,
           oneLiner: meta.oneLiner,
+          mtime,
         });
       } catch {
-        // Skip unreadable files
+        // Skip unreadable
       }
     }
 
-    // Embed new/changed skills in one batch call
+    // Embed new/changed skills
     if (toEmbed.length > 0) {
       const flatQueries = toEmbed.flatMap((p) => p.queries);
       const flatEmbeddings = await this.provider.embed(flatQueries);
@@ -206,14 +236,33 @@ export class SkillIndex {
         if (existing >= 0) this.skills[existing] = skill;
         else this.skills.push(skill);
         offset += p.queries.length;
+
+        // Update persistent cache
+        if (this.cache) {
+          this.cache.skills[p.location] = toCachedSkill(skill, p.mtime);
+        }
       }
     }
 
     // Remove deleted skills
     this.skills = this.skills.filter((s) => currentLocations.has(s.location));
+    if (this.cache) {
+      for (const key of Object.keys(this.cache.skills)) {
+        if (!currentLocations.has(key)) {
+          delete this.cache.skills[key];
+        }
+      }
+    }
 
     // Update mtime tracking
     this.skillMtimes = new Map(statResults.map((s) => [s.location, s.mtime]));
+
+    // Persist cache (fire-and-forget)
+    if (this.cache && toEmbed.length > 0) {
+      saveCache(this.cache).catch(() => {
+        // Cache save is best-effort
+      });
+    }
 
     this.buildTime = Date.now();
   }
@@ -236,7 +285,6 @@ export class SkillIndex {
 
     const scored = candidates.map((skill) => {
       const similarities = skill.embeddings.map((e) => cosineSimilarity(queryEmbedding, e));
-      // Use max instead of avg — a single strong match should surface the skill
       const score = Math.max(...similarities);
       return { skill, score };
     });

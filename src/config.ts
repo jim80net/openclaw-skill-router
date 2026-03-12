@@ -15,9 +15,9 @@ export type SkillRouterConfig = {
 export const DEFAULT_CONFIG: SkillRouterConfig = {
   enabled: false,
   topK: 3,
-  threshold: 0.65,
-  embeddingModel: "text-embedding-3-small",
-  embeddingBackend: "openai",
+  threshold: 0.45, // lower threshold for 384-dim local model (less discriminating than 1536-dim)
+  embeddingModel: "Xenova/all-MiniLM-L6-v2",
+  embeddingBackend: "local",
   maxInjectedChars: 8000,
   cacheTimeMs: 300_000, // 5 min
   types: ["skill", "memory", "workflow", "session-learning", "rule"],

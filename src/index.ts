@@ -126,18 +126,20 @@ export default function register(api: OpenClawPluginApi): void {
     return;
   }
 
-  // Create embedding provider
+  // Create embedding provider (local ONNX by default, zero API cost)
   let provider: EmbeddingProvider;
-  if (config.embeddingBackend === "local") {
-    provider = new LocalEmbeddingProvider(config.embeddingModel);
-    api.logger.info(`Skill router: using local ONNX embeddings (${config.embeddingModel})`);
-  } else {
+  if (config.embeddingBackend === "openai") {
     const apiKey = process.env.OPENAI_API_KEY ?? "";
     if (!apiKey) {
-      api.logger.warn("Skill router: no OPENAI_API_KEY found, disabling");
-      return;
+      api.logger.warn("Skill router: openai backend selected but no OPENAI_API_KEY, falling back to local");
+      provider = new LocalEmbeddingProvider(config.embeddingModel);
+    } else {
+      provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
+      api.logger.info(`Skill router: using OpenAI embeddings (${config.embeddingModel})`);
     }
-    provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
+  } else {
+    provider = new LocalEmbeddingProvider(config.embeddingModel);
+    api.logger.info(`Skill router: using local ONNX embeddings (${config.embeddingModel})`);
   }
 
   const index = new SkillIndex(config, provider);

@@ -9,7 +9,7 @@
     "properties": {
       "enabled": { "type": "boolean", "default": false },
       "topK": { "type": "number", "default": 3, "minimum": 1, "maximum": 10 },
-      "threshold": { "type": "number", "default": 0.30, "minimum": 0.0, "maximum": 1.0 },
+      "threshold": { "type": "number", "default": 0.35, "minimum": 0.0, "maximum": 1.0 },
       "scoringMode": {
         "type": "string",
         "enum": ["relative", "absolute"],
@@ -18,7 +18,7 @@
       },
       "maxDropoff": {
         "type": "number",
-        "default": 0.15,
+        "default": 0.10,
         "minimum": 0.0,
         "maximum": 1.0,
         "description": "In relative mode, drop results scoring more than this below the best match"

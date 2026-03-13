@@ -19,9 +19,9 @@ export type SkillRouterConfig = {
 export const DEFAULT_CONFIG: SkillRouterConfig = {
   enabled: false,
   topK: 3,
-  threshold: 0.30, // floor: best match must clear this to inject anything
+  threshold: 0.35, // floor: best match must clear this to inject anything
   scoringMode: "relative", // "relative" = inject top-K if best > threshold; "absolute" = each must pass
-  maxDropoff: 0.15, // in relative mode, drop results scoring > this below the best match
+  maxDropoff: 0.10, // in relative mode, drop results scoring > this below the best match
   embeddingModel: "Xenova/all-MiniLM-L6-v2",
   embeddingBackend: "local",
   maxInjectedChars: 8000,

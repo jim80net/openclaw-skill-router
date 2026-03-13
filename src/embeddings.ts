@@ -96,18 +96,45 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
   private async initExtractor(): Promise<unknown> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let transformers: { pipeline: any; env: { cacheDir: string } };
+
+    const { join, dirname } = await import("node:path");
+    const { homedir } = await import("node:os");
+    const { fileURLToPath } = await import("node:url");
+    const { createRequire } = await import("node:module");
+
+    // Resolve from the plugin's own directory, not the gateway's CWD.
+    // import.meta.url gives us the current file's URL in ESM context.
+    // In CJS/bundled context, fall back to __dirname or process.cwd().
+    let pluginDir: string;
     try {
-      // Dynamic import — @huggingface/transformers is an optional peer dep
-      transformers = await (Function('return import("@huggingface/transformers")')() as Promise<typeof transformers>);
+      pluginDir = dirname(fileURLToPath(import.meta.url));
     } catch {
-      throw new Error(
-        "Local embedding backend requires @huggingface/transformers. " +
-          "Install it: npm install @huggingface/transformers"
-      );
+      pluginDir = typeof __dirname !== "undefined" ? __dirname : process.cwd();
     }
 
-    const { join } = await import("node:path");
-    const { homedir } = await import("node:os");
+    try {
+      // First: try direct import (works when module is in node resolution path)
+      transformers = await import("@huggingface/transformers") as typeof transformers;
+    } catch {
+      try {
+        // Second: resolve from plugin's own node_modules using createRequire
+        const require = createRequire(join(pluginDir, "package.json"));
+        const resolvedPath = require.resolve("@huggingface/transformers");
+        transformers = await import(resolvedPath) as typeof transformers;
+      } catch {
+        try {
+          // Third: try absolute path to plugin's node_modules
+          const absolutePath = join(pluginDir, "..", "node_modules", "@huggingface", "transformers", "src", "transformers.js");
+          transformers = await import(absolutePath) as typeof transformers;
+        } catch {
+          throw new Error(
+            "Local embedding backend requires @huggingface/transformers. " +
+              "Install it in the plugin directory: cd <plugin-dir> && npm install @huggingface/transformers"
+          );
+        }
+      }
+    }
+
     transformers.env.cacheDir = join(homedir(), ".openclaw", "cache", "models");
 
     return transformers.pipeline("feature-extraction", this.model, {

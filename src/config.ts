@@ -15,7 +15,7 @@ export type SkillRouterConfig = {
 export const DEFAULT_CONFIG: SkillRouterConfig = {
   enabled: false,
   topK: 3,
-  threshold: 0.45, // lower threshold for 384-dim local model (less discriminating than 1536-dim)
+  threshold: 0.55, // tuned for 384-dim MiniLM-L6-v2
   embeddingModel: "Xenova/all-MiniLM-L6-v2",
   embeddingBackend: "local",
   maxInjectedChars: 8000,

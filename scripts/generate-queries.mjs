@@ -4,13 +4,14 @@
  * into the SKILL.md frontmatter as a static `queries:` list.
  *
  * Usage: OPENAI_API_KEY=sk-... node scripts/generate-queries.mjs
+ * Optional: SKILLS_DIR=/path/to/skills to override default ~/.openclaw/workspace/skills
  */
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const SKILLS_DIRS = [
-  "/home/jim_ramtank_com/.openclaw/workspace/skills",
+  process.env.SKILLS_DIR ?? join(process.env.HOME, ".openclaw/workspace/skills"),
 ];
 const API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = "gpt-4.1-nano";

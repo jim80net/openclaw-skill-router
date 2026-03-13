@@ -1,51 +1,48 @@
 # @openclaw/skill-router
 
-An OpenClaw plugin that implements a vector-based skill router. On each agent turn, it embeds the user message, performs a vector similarity search against skill descriptions, and injects matched skill content into the prompt context.
+**Teach your agent new tricks — without rewriting prompts.**
+
+The skill router is an [OpenClaw](https://github.com/General-ML/openclaw) plugin that gives your agent a long-term knowledge base. Write skills as plain Markdown files, drop them in a folder, and the router automatically surfaces the right ones each turn using vector similarity.
+
+No prompt engineering. No manual tool wiring. Just write what the agent should know, and the router handles the rest.
 
 ## How it works
 
-1. On startup (or when stale), the plugin scans `<workspace>/skills/*/SKILL.md` and `~/.openclaw/workspace/skills/*/SKILL.md` for skills with YAML frontmatter containing `name` and `description`.
-2. Each skill's description is embedded using OpenAI's `text-embedding-3-small` model and stored in memory.
-3. On each agent turn (`before_prompt_build` hook), the user's message is embedded and compared against all indexed skill embeddings using cosine similarity.
-4. Skills scoring above the configured threshold are read and prepended to the prompt context.
+```
+User message ──→ embed ──→ cosine search ──→ inject top matches into prompt
+```
 
-## Installation
+1. **Index** — On startup, the plugin scans your skill directories for `SKILL.md` files. Each skill's description is embedded into a vector and cached to disk.
+2. **Match** — On every agent turn, the user's message is embedded and compared against the index. Skills above a similarity threshold are selected.
+3. **Inject** — Matched skills are prepended to the prompt context so the agent can act on them immediately.
+
+The plugin also hooks into `before_tool_call` to inject tool-specific guidance, and `agent_end` to capture execution traces for later analysis.
+
+## Quick start
 
 ```bash
+# Install and enable
 openclaw plugins install --link /path/to/openclaw-skill-router
 openclaw plugins enable skill-router
 openclaw config set plugins.entries.skill-router.config.enabled true
 openclaw gateway restart
 ```
 
-## Requirements
+By default, the router uses **local ONNX embeddings** (via `@huggingface/transformers`) — no API key needed, zero cost.
 
-An OpenAI API key is required for embeddings. If you run OpenClaw as a gateway service (systemd), the key must be in OpenClaw's env config — shell environment variables are not inherited by the service:
+To use OpenAI embeddings instead:
 
 ```bash
+openclaw config set plugins.entries.skill-router.config.embeddingBackend openai
 openclaw config set env.vars.OPENAI_API_KEY "sk-..."
 openclaw gateway restart
 ```
 
-If you run the gateway directly in your shell, setting `OPENAI_API_KEY` in your environment is sufficient.
+> **Note:** If you run OpenClaw as a systemd service, shell environment variables aren't inherited. Set API keys via `openclaw config set env.vars.*` instead.
 
-## Configuration
+## Writing skills
 
-Add to your OpenClaw config under `plugins.entries.skill-router.config`:
-
-| Key               | Default                   | Description                                           |
-|-------------------|---------------------------|-------------------------------------------------------|
-| `enabled`         | `false`                   | Enable the skill router                               |
-| `topK`            | `3`                       | Maximum number of skills to inject per turn           |
-| `threshold`       | `0.65`                    | Minimum cosine similarity score (0–1)                 |
-| `embeddingModel`  | `text-embedding-3-small`  | OpenAI embedding model to use                         |
-| `maxInjectedChars`| `8000`                    | Maximum total characters to inject per turn           |
-| `cacheTimeMs`     | `300000`                  | How long (ms) to cache the skill index before rebuild |
-| `skillDirs`       | _(none)_                  | Additional skill directories to scan                  |
-
-## Skill format
-
-Skills must have a `SKILL.md` file with YAML frontmatter:
+A skill is a folder containing a `SKILL.md` file with YAML frontmatter:
 
 ```markdown
 ---
@@ -54,19 +51,63 @@ description: "Get current weather and forecasts for any location"
 ---
 # Weather Skill
 
-Instructions and context for the weather skill...
+You can check the weather using the `get_weather` tool.
+Always include the location and whether the user wants Celsius or Fahrenheit.
 ```
 
-Place skills in either:
-- `<workspace>/skills/<name>/SKILL.md` — per-workspace skills
-- `~/.openclaw/workspace/skills/<name>/SKILL.md` — global managed skills
+Place skill folders in either location:
+
+| Location | Scope |
+|---|---|
+| `<workspace>/skills/<name>/SKILL.md` | Per-workspace |
+| `~/.openclaw/workspace/skills/<name>/SKILL.md` | Global (all workspaces) |
+
+### Optional frontmatter fields
+
+```yaml
+---
+name: weather
+description: "Get current weather and forecasts for any location"
+type: skill          # skill | rule | memory | workflow | session-learning
+one-liner: "Weather lookup guidance"   # shown on repeat exposure (rules)
+queries:             # extra embedding vectors for better matching
+  - "what's the weather like"
+  - "check the forecast for tomorrow"
+---
+```
+
+## Configuration
+
+All settings live under `plugins.entries.skill-router.config` in your OpenClaw config:
+
+| Key | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Master switch |
+| `topK` | `3` | Max skills injected per turn |
+| `threshold` | `0.55` | Min cosine similarity (0–1) |
+| `embeddingBackend` | `"local"` | `"local"` (ONNX, free) or `"openai"` |
+| `embeddingModel` | `"Xenova/all-MiniLM-L6-v2"` | Model name (local) or OpenAI model ID |
+| `maxInjectedChars` | `8000` | Character budget per turn |
+| `cacheTimeMs` | `300000` | Index rebuild interval (ms) |
+| `skillDirs` | — | Additional directories to scan |
+| `types` | all | Knowledge types to route |
+
+## Features
+
+- **Zero-cost by default** — Local ONNX embeddings, no API calls needed
+- **Persistent cache** — Embeddings are cached to disk keyed by model + file mtime; survives restarts
+- **Graduated disclosure** — Rules show full text on first exposure, then brief reminders
+- **Tool guidance** — Hooks into `before_tool_call` to inject tool-specific instructions
+- **Execution traces** — Captures which skills fired and what tools were called for offline analysis
+- **Multi-query matching** — Skills can define multiple query vectors for broader recall
+- **Prompt extraction** — Strips OpenClaw envelope metadata to match on actual user intent
 
 ## Development
 
 ```bash
 npm install
-npm test          # Run tests with vitest
-npm run typecheck # Type-check with tsc
+npm test          # vitest
+npm run typecheck # tsc --noEmit
 ```
 
 ## License

@@ -105,10 +105,12 @@ All settings live under `plugins.entries.skill-router.config` in your OpenClaw c
 ## Development
 
 ```bash
-npm install
-npm test          # vitest
-npm run typecheck # tsc --noEmit
+pnpm install          # see note below if onnxruntime postinstall fails
+pnpm test             # vitest
+pnpm run typecheck    # tsc --noEmit
 ```
+
+> **Note:** If `pnpm install` fails due to `onnxruntime-node` CUDA postinstall errors, run `pnpm install --ignore-scripts` instead. The ONNX runtime is only needed at plugin runtime, not for development.
 
 ## License
 

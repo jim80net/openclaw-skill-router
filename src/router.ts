@@ -1,17 +1,10 @@
 import type { SkillIndex } from "./skill-index.ts";
 import type { SkillRouterConfig } from "./config.ts";
 import type { SessionTracker } from "./session.ts";
-import type { IndexedSkill } from "./types.ts";
+import type { IndexedSkill, PluginLogger } from "./types.ts";
 import type { TraceAccumulator } from "./traces.ts";
 import { extractUserMessage } from "./prompt-extractor.ts";
 import { loadTelemetry, saveTelemetry, recordMatch } from "./telemetry.ts";
-
-export type PluginLogger = {
-  info: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-  debug?: (msg: string) => void;
-};
 
 type HookEvent = {
   prompt: string;

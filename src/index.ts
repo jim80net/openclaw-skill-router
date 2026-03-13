@@ -5,18 +5,12 @@ import { SessionTracker } from "./session.ts";
 import { TraceAccumulator } from "./traces.ts";
 import { OpenAIEmbeddingProvider, LocalEmbeddingProvider } from "./embeddings.ts";
 import type { EmbeddingProvider } from "./embeddings.ts";
+import type { PluginLogger } from "./types.ts";
 
 type OpenClawConfig = {
   workspace?: {
     dir?: string;
   };
-};
-
-type PluginLogger = {
-  info: (msg: string) => void;
-  warn: (msg: string) => void;
-  error: (msg: string) => void;
-  debug?: (msg: string) => void;
 };
 
 type OpenClawPluginApi = {
@@ -267,9 +261,10 @@ export default function register(api: OpenClawPluginApi): void {
     },
   });
 
-  // Periodic cleanup of stale trace entries (every 30 min)
+  // Periodic cleanup of stale trace and session entries (every 30 min)
   const cleanupInterval = setInterval(() => {
     traceAccumulator.cleanup();
+    sessionTracker.cleanup();
   }, 1800_000);
 
   // Unref so it doesn't prevent process exit

@@ -38,7 +38,7 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRout
         ? pluginConfig.embeddingModel
         : DEFAULT_CONFIG.embeddingModel,
     embeddingBackend:
-      pluginConfig.embeddingBackend === "local" ? "local" : DEFAULT_CONFIG.embeddingBackend,
+      pluginConfig.embeddingBackend === "openai" ? "openai" : "local",
     maxInjectedChars:
       typeof pluginConfig.maxInjectedChars === "number"
         ? pluginConfig.maxInjectedChars

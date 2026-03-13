@@ -459,4 +459,72 @@ describe("SkillIndex", () => {
 
     expect(index.skillCount).toBe(1); // Only git
   });
+
+  // ---------------------------------------------------------------------------
+  // Relative scoring mode
+  // ---------------------------------------------------------------------------
+
+  it("relative mode: injects top-K when best score clears floor", async () => {
+    // Two skills: embeddings [1,0,0,0] and [0.9,0.1,0,0]
+    // Query [1,0,0,0] → scores ~1.0 and ~0.9 — both within maxDropoff=0.15
+    const searchProvider: EmbeddingProvider = {
+      embed: vi.fn()
+        .mockResolvedValueOnce([[1, 0, 0, 0], [0.9, 0.1, 0, 0]]) // build
+        .mockResolvedValueOnce([[1, 0, 0, 0]]), // search
+    };
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
+    await index.build(workspaceDir);
+
+    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    expect(results).toHaveLength(2);
+  });
+
+  it("relative mode: returns nothing when best score below floor", async () => {
+    // Two skills: embeddings [1,0,0,0] and [0,1,0,0]
+    // Query [0,0,1,0] → scores 0.0 and 0.0 — below floor
+    const searchProvider: EmbeddingProvider = {
+      embed: vi.fn()
+        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+        .mockResolvedValueOnce([[0, 0, 1, 0]]), // search — orthogonal
+    };
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
+    await index.build(workspaceDir);
+
+    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    expect(results).toHaveLength(0);
+  });
+
+  it("relative mode: drops results beyond maxDropoff from best", async () => {
+    // Two skills: embeddings [1,0,0,0] and [0,1,0,0]
+    // Query [0.95,0.05,0,0] → score ~0.998 for skill 0, ~0.05 for skill 1
+    // maxDropoff=0.15 → skill 1 drops (gap ~0.95)
+    const searchProvider: EmbeddingProvider = {
+      embed: vi.fn()
+        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+        .mockResolvedValueOnce([[0.95, 0.05, 0, 0]]), // search
+    };
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
+    await index.build(workspaceDir);
+
+    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    expect(results).toHaveLength(1);
+    expect(results[0].score).toBeGreaterThan(0.9);
+  });
+
+  it("relative mode: respects topK limit", async () => {
+    const searchProvider: EmbeddingProvider = {
+      embed: vi.fn()
+        .mockResolvedValueOnce([[1, 0, 0, 0], [0.95, 0.05, 0, 0]]) // build — close scores
+        .mockResolvedValueOnce([[1, 0, 0, 0]]), // search
+    };
+
+    const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
+    await index.build(workspaceDir);
+
+    const results = await index.search("test", 1, 0.30, undefined, "relative", 0.15);
+    expect(results).toHaveLength(1);
+  });
 });

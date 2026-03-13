@@ -271,7 +271,9 @@ export class SkillIndex {
     query: string,
     topK: number,
     threshold: number,
-    typeFilter?: SkillType[]
+    typeFilter?: SkillType[],
+    scoringMode: "relative" | "absolute" = "absolute",
+    maxDropoff: number = 0.15
   ): Promise<SkillSearchResult[]> {
     let candidates = this.skills;
     if (typeFilter && typeFilter.length > 0) {
@@ -289,9 +291,21 @@ export class SkillIndex {
       return { skill, score };
     });
 
-    return scored
+    const sorted = scored.sort((a, b) => b.score - a.score);
+
+    if (scoringMode === "relative") {
+      // Relative mode: if the best match clears the floor, inject top-K
+      // but drop results that fall too far below the best
+      if (sorted.length === 0 || sorted[0].score < threshold) return [];
+      const bestScore = sorted[0].score;
+      return sorted
+        .filter((r) => bestScore - r.score <= maxDropoff)
+        .slice(0, topK);
+    }
+
+    // Absolute mode (legacy): each result must individually pass threshold
+    return sorted
       .filter((r) => r.score >= threshold)
-      .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   }
 

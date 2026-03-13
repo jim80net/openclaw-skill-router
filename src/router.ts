@@ -87,7 +87,9 @@ export function createRouter(
         userMessage,
         config.topK,
         config.threshold,
-        config.types
+        config.types,
+        config.scoringMode,
+        config.maxDropoff
       );
     } catch (err) {
       logger.warn(`Skill router: search failed: ${err}`);

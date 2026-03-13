@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat, access } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { cosineSimilarity } from "./embeddings.ts";
@@ -80,7 +80,7 @@ async function scanSkillDirs(dirs: string[]): Promise<string[]> {
     for (const entry of entries) {
       const skillMd = join(dir, entry, "SKILL.md");
       try {
-        await readFile(skillMd);
+        await access(skillMd);
         skillFiles.push(skillMd);
       } catch {
         // No SKILL.md

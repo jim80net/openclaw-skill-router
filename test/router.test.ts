@@ -409,4 +409,21 @@ describe("SessionTracker", () => {
     tracker.clearSession("s1");
     expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(false);
   });
+
+  it("cleanup removes stale sessions", async () => {
+    const tracker = new SessionTracker();
+    tracker.markRuleShown("s1", "/rule.md");
+    // Wait 10ms so the entry becomes stale with maxAge=1
+    await new Promise((r) => setTimeout(r, 10));
+    tracker.cleanup(1);
+    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(false);
+  });
+
+  it("cleanup keeps recently accessed sessions", () => {
+    const tracker = new SessionTracker();
+    tracker.markRuleShown("s1", "/rule.md");
+    // Cleanup with very large maxAge should keep everything
+    tracker.cleanup(999_999_999);
+    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(true);
+  });
 });

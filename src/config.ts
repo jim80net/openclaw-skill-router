@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
   topK: 3,
   threshold: 0.35, // floor: best match must clear this to inject anything
   scoringMode: "relative", // "relative" = inject top-K if best > threshold; "absolute" = each must pass
-  maxDropoff: 0.10, // in relative mode, drop results scoring > this below the best match
+  maxDropoff: 0.1, // in relative mode, drop results scoring > this below the best match
   embeddingModel: "Xenova/all-MiniLM-L6-v2",
   embeddingBackend: "local",
   maxInjectedChars: 8000,
@@ -40,8 +40,7 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRout
       typeof pluginConfig.threshold === "number"
         ? pluginConfig.threshold
         : DEFAULT_CONFIG.threshold,
-    scoringMode:
-      pluginConfig.scoringMode === "absolute" ? "absolute" : DEFAULT_CONFIG.scoringMode,
+    scoringMode: pluginConfig.scoringMode === "absolute" ? "absolute" : DEFAULT_CONFIG.scoringMode,
     maxDropoff:
       typeof pluginConfig.maxDropoff === "number"
         ? pluginConfig.maxDropoff
@@ -50,8 +49,7 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRout
       typeof pluginConfig.embeddingModel === "string"
         ? pluginConfig.embeddingModel
         : DEFAULT_CONFIG.embeddingModel,
-    embeddingBackend:
-      pluginConfig.embeddingBackend === "openai" ? "openai" : "local",
+    embeddingBackend: pluginConfig.embeddingBackend === "openai" ? "openai" : "local",
     maxInjectedChars:
       typeof pluginConfig.maxInjectedChars === "number"
         ? pluginConfig.maxInjectedChars

@@ -1,12 +1,12 @@
+import manifest from "../openclaw.plugin.json" with { type: "json" };
 import { resolveConfig } from "./config.ts";
-import { SkillIndex } from "./skill-index.ts";
+import type { EmbeddingProvider } from "./embeddings.ts";
+import { LocalEmbeddingProvider, OpenAIEmbeddingProvider } from "./embeddings.ts";
 import { createRouter } from "./router.ts";
 import { SessionTracker } from "./session.ts";
+import { SkillIndex } from "./skill-index.ts";
 import { TraceAccumulator } from "./traces.ts";
-import { OpenAIEmbeddingProvider, LocalEmbeddingProvider } from "./embeddings.ts";
-import type { EmbeddingProvider } from "./embeddings.ts";
 import type { PluginLogger } from "./types.ts";
-import manifest from "../openclaw.plugin.json" with { type: "json" };
 
 type OpenClawConfig = {
   workspace?: {
@@ -19,11 +19,7 @@ type OpenClawPluginApi = {
   config: OpenClawConfig;
   pluginConfig?: Record<string, unknown>;
   logger: PluginLogger;
-  on: (
-    event: string,
-    handler: (...args: unknown[]) => unknown,
-    opts?: unknown
-  ) => void;
+  on: (event: string, handler: (...args: unknown[]) => unknown, opts?: unknown) => void;
   registerService: (service: { id: string; start: () => Promise<void>; stop: () => void }) => void;
 };
 
@@ -79,9 +75,10 @@ function buildToolQuery(toolName: string, toolInput?: Record<string, unknown>): 
     case "Read":
     case "Write":
     case "Edit":
-      context = typeof toolInput.file_path === "string" || typeof toolInput.path === "string"
-        ? String(toolInput.file_path ?? toolInput.path)
-        : "";
+      context =
+        typeof toolInput.file_path === "string" || typeof toolInput.path === "string"
+          ? String(toolInput.file_path ?? toolInput.path)
+          : "";
       break;
     case "message":
       context = typeof toolInput.action === "string" ? `${toolInput.action}` : "";
@@ -89,9 +86,10 @@ function buildToolQuery(toolName: string, toolInput?: Record<string, unknown>): 
       break;
     case "web_search":
     case "web_fetch":
-      context = typeof toolInput.query === "string" || typeof toolInput.url === "string"
-        ? String(toolInput.query ?? toolInput.url).slice(0, 200)
-        : "";
+      context =
+        typeof toolInput.query === "string" || typeof toolInput.url === "string"
+          ? String(toolInput.query ?? toolInput.url).slice(0, 200)
+          : "";
       break;
     case "sessions_spawn":
       context = typeof toolInput.task === "string" ? toolInput.task.slice(0, 200) : "";
@@ -126,7 +124,9 @@ export default function register(api: OpenClawPluginApi): void {
   if (config.embeddingBackend === "openai") {
     const apiKey = process.env.OPENAI_API_KEY ?? "";
     if (!apiKey) {
-      api.logger.warn("Skill router: openai backend selected but no OPENAI_API_KEY, falling back to local");
+      api.logger.warn(
+        "Skill router: openai backend selected but no OPENAI_API_KEY, falling back to local",
+      );
       provider = new LocalEmbeddingProvider(config.embeddingModel);
     } else {
       provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
@@ -172,7 +172,7 @@ export default function register(api: OpenClawPluginApi): void {
         query,
         2, // Max 2 tool guidances per call
         config.threshold + 0.1, // Higher threshold for tool guidance (less noise)
-        ["tool-guidance"]
+        ["tool-guidance"],
       );
 
       if (results.length === 0) return undefined;
@@ -191,7 +191,7 @@ export default function register(api: OpenClawPluginApi): void {
         if (totalChars + content.length > 4000) break;
 
         sections.push(
-          `## Tool Guidance: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n${content}`
+          `## Tool Guidance: ${result.skill.name} (relevance: ${(result.score * 100).toFixed(0)}%)\n\n${content}`,
         );
         totalChars += content.length;
       }
@@ -199,7 +199,7 @@ export default function register(api: OpenClawPluginApi): void {
       if (sections.length === 0) return undefined;
 
       api.logger.info(
-        `Skill router[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`
+        `Skill router[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`,
       );
 
       return { prependContext: sections.join("\n\n---\n\n") };
@@ -227,14 +227,10 @@ export default function register(api: OpenClawPluginApi): void {
         : "completed";
 
     try {
-      const trace = await traceAccumulator.finalize(
-        sessionKey,
-        outcome,
-        endEvent.error
-      );
+      const trace = await traceAccumulator.finalize(sessionKey, outcome, endEvent.error);
       if (trace && trace.skillsInjected.length > 0) {
         api.logger.info(
-          `Skill router[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`
+          `Skill router[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`,
         );
       }
     } catch (err) {
@@ -273,5 +269,7 @@ export default function register(api: OpenClawPluginApi): void {
     (cleanupInterval as NodeJS.Timeout).unref();
   }
 
-  api.logger.info(`Skill router v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`);
+  api.logger.info(
+    `Skill router v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`,
+  );
 }

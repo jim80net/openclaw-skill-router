@@ -2,10 +2,10 @@
 // Telemetry: track which skills fire, when, and for whom
 // ---------------------------------------------------------------------------
 
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 export type EntryTelemetry = {
   matchCount: number;
@@ -41,7 +41,7 @@ export async function loadTelemetry(): Promise<TelemetryData> {
 export async function saveTelemetry(data: TelemetryData): Promise<void> {
   const dir = dirname(TELEMETRY_PATH);
   await mkdir(dir, { recursive: true });
-  const tmpPath = TELEMETRY_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
+  const tmpPath = `${TELEMETRY_PATH}.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
   await rename(tmpPath, TELEMETRY_PATH);
 }
@@ -49,11 +49,7 @@ export async function saveTelemetry(data: TelemetryData): Promise<void> {
 /**
  * Record that a skill was matched and injected. Mutates in place.
  */
-export function recordMatch(
-  telemetry: TelemetryData,
-  location: string,
-  sessionKey: string
-): void {
+export function recordMatch(telemetry: TelemetryData, location: string, sessionKey: string): void {
   const now = new Date().toISOString();
   const existing = telemetry.entries[location];
 

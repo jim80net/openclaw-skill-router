@@ -27,11 +27,19 @@
     ]
   },
   "scripts": {
+    "lint": "biome check src/ test/",
+    "lint:fix": "biome check --write src/ test/",
+    "format": "biome format --write src/ test/",
+    "format:check": "biome format src/ test/",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.7",
     "@types/node": "^25.3.1",
+    "lefthook": "^2.1.4",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },

@@ -2,10 +2,10 @@
 // Persistent file-based cache for skill embeddings
 // ---------------------------------------------------------------------------
 
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { IndexedSkill, SkillType } from "./types.ts";
 
 export type CachedSkill = {
@@ -46,7 +46,7 @@ export async function loadCache(embeddingModel: string): Promise<CacheData> {
 export async function saveCache(data: CacheData): Promise<void> {
   const dir = dirname(CACHE_PATH);
   await mkdir(dir, { recursive: true });
-  const tmpPath = CACHE_PATH + "." + randomBytes(4).toString("hex") + ".tmp";
+  const tmpPath = `${CACHE_PATH}.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(tmpPath, JSON.stringify(data), "utf-8");
   await rename(tmpPath, CACHE_PATH);
 }

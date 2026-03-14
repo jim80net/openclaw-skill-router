@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_CONFIG } from "../src/config.ts";
 import { createRouter } from "../src/router.ts";
 import { SessionTracker } from "../src/session.ts";
-import type { SkillIndex, ParsedFrontmatter } from "../src/skill-index.ts";
-import type { SkillSearchResult } from "../src/types.ts";
-import type { IndexedSkill } from "../src/types.ts";
-import { DEFAULT_CONFIG } from "../src/config.ts";
+import type { SkillIndex } from "../src/skill-index.ts";
+import type { IndexedSkill, SkillSearchResult } from "../src/types.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +58,12 @@ describe("createRouter", () => {
   it("returns undefined when config.enabled is false", async () => {
     const logger = makeLogger();
     const index = makeIndex();
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: false }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: false },
+      logger,
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -72,7 +76,12 @@ describe("createRouter", () => {
     const index = makeIndex({
       search: vi.fn().mockResolvedValue([]),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -85,7 +94,12 @@ describe("createRouter", () => {
       needsRebuild: vi.fn().mockReturnValue(true),
       search: vi.fn().mockResolvedValue([]),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -98,7 +112,12 @@ describe("createRouter", () => {
       needsRebuild: vi.fn().mockReturnValue(true),
       search: vi.fn().mockResolvedValue([]),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     await router(BASE_EVENT, {});
 
@@ -111,13 +130,22 @@ describe("createRouter", () => {
 
   it("injects skill teaser (not full body) for type=skill", async () => {
     const logger = makeLogger();
-    const skill = makeSkill({ name: "weather", description: "Get weather forecasts", type: "skill" });
+    const skill = makeSkill({
+      name: "weather",
+      description: "Get weather forecasts",
+      type: "skill",
+    });
     const matches: SkillSearchResult[] = [{ skill, score: 0.92 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("# Full body that should NOT appear"),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -136,7 +164,12 @@ describe("createRouter", () => {
     const skill = makeSkill({ name: "deploy", description: "Deploy workflow", type: "workflow" });
     const matches: SkillSearchResult[] = [{ skill, score: 0.85 }];
     const index = makeIndex({ search: vi.fn().mockResolvedValue(matches) });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
     expect(result?.prependContext).toContain("Available Skill: deploy");
@@ -154,7 +187,12 @@ describe("createRouter", () => {
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Always use pnpm instead of npm."),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
     expect(result?.prependContext).toContain("Recalled Memory: pnpm-pref");
@@ -162,13 +200,22 @@ describe("createRouter", () => {
   });
 
   it("injects full body for type=session-learning", async () => {
-    const skill = makeSkill({ name: "correction", description: "A correction", type: "session-learning" });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.80 }];
+    const skill = makeSkill({
+      name: "correction",
+      description: "A correction",
+      type: "session-learning",
+    });
+    const matches: SkillSearchResult[] = [{ skill, score: 0.8 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Don't do X, do Y instead."),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
     expect(result?.prependContext).toContain("Recalled Memory: correction");
@@ -186,12 +233,17 @@ describe("createRouter", () => {
       type: "rule",
       oneLiner: "Use pnpm, not npm.",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.90 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.9 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Always use pnpm for all package management."),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
     expect(result?.prependContext).toContain("Rule: pnpm-rule");
@@ -206,12 +258,17 @@ describe("createRouter", () => {
       type: "rule",
       oneLiner: "Use pnpm, not npm.",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.90 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.9 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Full rule body."),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     // First call — full body
     await router(BASE_EVENT, BASE_CONTEXT);
@@ -235,7 +292,12 @@ describe("createRouter", () => {
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Full body."),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     // First call
     await router(BASE_EVENT, BASE_CONTEXT);
@@ -266,7 +328,7 @@ describe("createRouter", () => {
       index,
       { ...DEFAULT_CONFIG, enabled: true, maxInjectedChars: 6000 },
       logger,
-      sessionTracker
+      sessionTracker,
     );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
@@ -284,13 +346,18 @@ describe("createRouter", () => {
     const matches: SkillSearchResult[] = [
       { skill: makeSkill({ name: "r1", type: "rule", oneLiner: "rule" }), score: 0.9 },
       { skill: makeSkill({ name: "m1", type: "memory" }), score: 0.85 },
-      { skill: makeSkill({ name: "s1", type: "skill" }), score: 0.80 },
+      { skill: makeSkill({ name: "s1", type: "skill" }), score: 0.8 },
     ];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("content"),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -308,7 +375,12 @@ describe("createRouter", () => {
     const index = makeIndex({
       search: vi.fn().mockRejectedValue(new Error("network error")),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -323,7 +395,12 @@ describe("createRouter", () => {
       build: vi.fn().mockRejectedValue(new Error("build failed")),
       search: vi.fn().mockResolvedValue([]),
     });
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
@@ -335,7 +412,10 @@ describe("createRouter", () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
       { skill: makeSkill({ name: "bad", type: "memory", location: "/bad/SKILL.md" }), score: 0.9 },
-      { skill: makeSkill({ name: "good", type: "memory", location: "/good/SKILL.md" }), score: 0.85 },
+      {
+        skill: makeSkill({ name: "good", type: "memory", location: "/good/SKILL.md" }),
+        score: 0.85,
+      },
     ];
 
     const index = makeIndex({
@@ -346,7 +426,12 @@ describe("createRouter", () => {
         .mockResolvedValueOnce("Good content"),
     });
 
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
     expect(result?.prependContext).toContain("good");
@@ -365,7 +450,12 @@ describe("createRouter", () => {
       readSkillContent: vi.fn().mockRejectedValue(new Error("read error")),
     });
 
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, logger, sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      logger,
+      sessionTracker,
+    );
     const result = await router(BASE_EVENT, BASE_CONTEXT);
 
     expect(result).toBeUndefined();
@@ -373,7 +463,12 @@ describe("createRouter", () => {
 
   it("skips HEARTBEAT_OK prompts", async () => {
     const index = makeIndex();
-    const router = createRouter(index, { ...DEFAULT_CONFIG, enabled: true }, makeLogger(), sessionTracker);
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
 
     const result = await router({ prompt: "HEARTBEAT_OK", messages: [] }, BASE_CONTEXT);
     expect(result).toBeUndefined();

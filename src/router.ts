@@ -1,10 +1,10 @@
-import type { SkillIndex } from "./skill-index.ts";
 import type { SkillRouterConfig } from "./config.ts";
-import type { SessionTracker } from "./session.ts";
-import type { IndexedSkill, PluginLogger } from "./types.ts";
-import type { TraceAccumulator } from "./traces.ts";
 import { extractUserMessage } from "./prompt-extractor.ts";
-import { loadTelemetry, saveTelemetry, recordMatch } from "./telemetry.ts";
+import type { SessionTracker } from "./session.ts";
+import type { SkillIndex } from "./skill-index.ts";
+import { loadTelemetry, recordMatch, saveTelemetry } from "./telemetry.ts";
+import type { TraceAccumulator } from "./traces.ts";
+import type { IndexedSkill, PluginLogger, SkillSearchResult } from "./types.ts";
 
 type HookEvent = {
   prompt: string;
@@ -29,7 +29,7 @@ function formatRule(
   skill: IndexedSkill,
   relevance: string,
   content: string,
-  isReminder: boolean
+  isReminder: boolean,
 ): string {
   if (isReminder) {
     const reminder = skill.oneLiner || skill.description;
@@ -59,7 +59,7 @@ export function createRouter(
   config: SkillRouterConfig,
   logger: PluginLogger,
   sessionTracker: SessionTracker,
-  traceAccumulator?: TraceAccumulator
+  traceAccumulator?: TraceAccumulator,
 ) {
   return async (event: HookEvent, context: HookContext): Promise<HookResult> => {
     if (!config.enabled) return undefined;
@@ -81,7 +81,7 @@ export function createRouter(
     }
 
     // Search for matching skills using cleaned message
-    let results;
+    let results: SkillSearchResult[];
     try {
       results = await index.search(
         userMessage,
@@ -89,7 +89,7 @@ export function createRouter(
         config.threshold,
         config.types,
         config.scoringMode,
-        config.maxDropoff
+        config.maxDropoff,
       );
     } catch (err) {
       logger.warn(`Skill router: search failed: ${err}`);
@@ -166,12 +166,11 @@ export function createRouter(
     // Log breakdown
     const parts: string[] = [];
     if (counts.rules > 0) parts.push(`${counts.rules} rule${counts.rules > 1 ? "s" : ""}`);
-    if (counts.skills > 0)
-      parts.push(`${counts.skills} skill${counts.skills > 1 ? "s" : ""}`);
+    if (counts.skills > 0) parts.push(`${counts.skills} skill${counts.skills > 1 ? "s" : ""}`);
     if (counts.memories > 0)
       parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
     logger.info(
-      `Skill router: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`
+      `Skill router: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`,
     );
 
     // Record telemetry (fire-and-forget)
@@ -190,11 +189,7 @@ export function createRouter(
 
     // Record trace data
     if (traceAccumulator && sessionKey) {
-      traceAccumulator.recordInjection(
-        sessionKey,
-        context.agentId ?? "unknown",
-        injectedNames
-      );
+      traceAccumulator.recordInjection(sessionKey, context.agentId ?? "unknown", injectedNames);
     }
 
     return { prependContext };

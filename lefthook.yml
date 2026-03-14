@@ -1,0 +1,10 @@
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.{ts,tsx,js,jsx}"
+      run: pnpm lint
+    typecheck:
+      run: pnpm typecheck
+    test:
+      run: pnpm test

@@ -17,7 +17,7 @@ type OpenAIEmbeddingResponse = {
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   constructor(
     private model: string,
-    private apiKey: string
+    private apiKey: string,
   ) {}
 
   async embed(texts: string[]): Promise<number[][]> {
@@ -114,22 +114,30 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 
     try {
       // First: try direct import (works when module is in node resolution path)
-      transformers = await import("@huggingface/transformers") as typeof transformers;
+      transformers = (await import("@huggingface/transformers")) as typeof transformers;
     } catch {
       try {
         // Second: resolve from plugin's own node_modules using createRequire
         const require = createRequire(join(pluginDir, "package.json"));
         const resolvedPath = require.resolve("@huggingface/transformers");
-        transformers = await import(resolvedPath) as typeof transformers;
+        transformers = (await import(resolvedPath)) as typeof transformers;
       } catch {
         try {
           // Third: try absolute path to plugin's node_modules
-          const absolutePath = join(pluginDir, "..", "node_modules", "@huggingface", "transformers", "src", "transformers.js");
-          transformers = await import(absolutePath) as typeof transformers;
+          const absolutePath = join(
+            pluginDir,
+            "..",
+            "node_modules",
+            "@huggingface",
+            "transformers",
+            "src",
+            "transformers.js",
+          );
+          transformers = (await import(absolutePath)) as typeof transformers;
         } catch {
           throw new Error(
             "Local embedding backend requires @huggingface/transformers. " +
-              "Install it in the plugin directory: cd <plugin-dir> && npm install @huggingface/transformers"
+              "Install it in the plugin directory: cd <plugin-dir> && npm install @huggingface/transformers",
           );
         }
       }

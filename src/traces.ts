@@ -2,9 +2,9 @@
 // Execution trace capture for GEPA-style skill evolution
 // ---------------------------------------------------------------------------
 
-import { writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 export type ExecutionTrace = {
   sessionKey: string;
@@ -41,13 +41,16 @@ export async function writeTrace(trace: ExecutionTrace): Promise<void> {
  * One per session, created on first hook fire, finalized on agent_end.
  */
 export class TraceAccumulator {
-  private traces: Map<string, {
-    startTime: number;
-    skillsInjected: Set<string>;
-    toolsCalled: Set<string>;
-    agentId: string;
-    messageCount: number;
-  }> = new Map();
+  private traces: Map<
+    string,
+    {
+      startTime: number;
+      skillsInjected: Set<string>;
+      toolsCalled: Set<string>;
+      agentId: string;
+      messageCount: number;
+    }
+  > = new Map();
 
   recordInjection(sessionKey: string, agentId: string, skillNames: string[]): void {
     let entry = this.traces.get(sessionKey);
@@ -83,7 +86,7 @@ export class TraceAccumulator {
   async finalize(
     sessionKey: string,
     outcome: ExecutionTrace["outcome"],
-    errorSummary?: string
+    errorSummary?: string,
   ): Promise<ExecutionTrace | null> {
     const entry = this.traces.get(sessionKey);
     if (!entry) return null;

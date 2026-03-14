@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { extractUserMessage } from "../src/prompt-extractor.ts";
 
 describe("extractUserMessage", () => {
@@ -8,9 +8,7 @@ describe("extractUserMessage", () => {
   });
 
   it("passes through plain messages unchanged", () => {
-    expect(extractUserMessage("what's the weather like?")).toBe(
-      "what's the weather like?"
-    );
+    expect(extractUserMessage("what's the weather like?")).toBe("what's the weather like?");
   });
 
   it("strips conversation info metadata", () => {

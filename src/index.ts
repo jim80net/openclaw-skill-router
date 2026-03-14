@@ -6,6 +6,7 @@ import { TraceAccumulator } from "./traces.ts";
 import { OpenAIEmbeddingProvider, LocalEmbeddingProvider } from "./embeddings.ts";
 import type { EmbeddingProvider } from "./embeddings.ts";
 import type { PluginLogger } from "./types.ts";
+import manifest from "../openclaw.plugin.json" with { type: "json" };
 
 type OpenClawConfig = {
   workspace?: {
@@ -272,5 +273,5 @@ export default function register(api: OpenClawPluginApi): void {
     (cleanupInterval as NodeJS.Timeout).unref();
   }
 
-  api.logger.info("Skill router v0.5.0: registered (before_prompt_build + before_tool_call + agent_end hooks)");
+  api.logger.info(`Skill router v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`);
 }

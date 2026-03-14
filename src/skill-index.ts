@@ -63,6 +63,84 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
 }
 
 // ---------------------------------------------------------------------------
+// Memory file parsing (shared signature with claude-skill-router)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a memory markdown file into sections.
+ * Extracts ## sections and looks for `Triggers:` lines as queries.
+ * Signature matches claude-skill-router/src/core/skill-index.ts.
+ */
+export function parseMemoryFile(
+  content: string,
+  _filePath: string
+): Array<{ name: string; description: string; queries: string[]; body: string }> {
+  const results: Array<{ name: string; description: string; queries: string[]; body: string }> = [];
+
+  // Split by ## headings
+  const sections = content.split(/^(?=##\s)/m);
+
+  for (const section of sections) {
+    const headingMatch = section.match(/^##\s+(.+)/);
+    if (!headingMatch) continue;
+
+    const name = headingMatch[1].trim();
+    const bodyLines: string[] = [];
+    const queries: string[] = [];
+
+    for (const line of section.split(/\r?\n/).slice(1)) {
+      const triggerMatch = line.match(/^Triggers?:\s*(.+)/i);
+      if (triggerMatch) {
+        // Parse comma-separated or quoted triggers
+        const raw = triggerMatch[1];
+        const parsed = raw
+          .split(/,\s*/)
+          .map((t) => t.replace(/^["']|["']$/g, "").trim())
+          .filter((t) => t.length > 0);
+        queries.push(...parsed);
+      } else {
+        bodyLines.push(line);
+      }
+    }
+
+    const body = bodyLines.join("\n").trim();
+    if (body.length > 0 || queries.length > 0) {
+      // Use the first meaningful line as description if body is short
+      const description = body.split("\n")[0]?.trim() || name;
+      results.push({ name, description, queries, body });
+    }
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Memory directory scanning
+// ---------------------------------------------------------------------------
+
+async function scanMemoryDirs(dirs: string[]): Promise<string[]> {
+  const memoryFiles: string[] = [];
+
+  for (const dir of dirs) {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.endsWith(".md")) continue;
+      // Skip top-level MEMORY.md — it's already injected by OpenClaw
+      if (entry === "MEMORY.md") continue;
+      memoryFiles.push(join(dir, entry));
+    }
+  }
+
+  return memoryFiles;
+}
+
+// ---------------------------------------------------------------------------
 // Directory scanning
 // ---------------------------------------------------------------------------
 
@@ -141,13 +219,21 @@ export class SkillIndex {
 
     const skillFiles = await scanSkillDirs(dirsToScan);
 
-    // Stat all files
-    const statResults = await Promise.all(
-      skillFiles.map(async (location) => {
+    // Scan memory directories
+    const memoryDirsToScan: string[] = this.config.memoryDirs ? [...this.config.memoryDirs] : [];
+    const memoryFiles = await scanMemoryDirs(memoryDirsToScan);
+
+    // Stat all files (skills + memory)
+    const statResults = await Promise.all([
+      ...skillFiles.map(async (location) => {
         const s = await stat(location);
-        return { location, mtime: s.mtimeMs };
-      })
-    );
+        return { location, mtime: s.mtimeMs, isMemory: false };
+      }),
+      ...memoryFiles.map(async (location) => {
+        const s = await stat(location);
+        return { location, mtime: s.mtimeMs, isMemory: true };
+      }),
+    ]);
 
     // Check for changes
     const currentLocations = new Set(statResults.map((s) => s.location));
@@ -164,7 +250,7 @@ export class SkillIndex {
       return;
     }
 
-    // Parse skills that need (re)embedding
+    // Parse skills/memories that need (re)embedding
     type ParsedSkill = {
       name: string;
       description: string;
@@ -176,7 +262,46 @@ export class SkillIndex {
     };
     const toEmbed: ParsedSkill[] = [];
 
-    for (const { location, mtime } of statResults) {
+    for (const { location, mtime, isMemory } of statResults) {
+      if (isMemory) {
+        // Memory files may produce multiple sections — each keyed as "path#SectionName"
+        // Check if the base file changed
+        const cachedMtime = this.skillMtimes.get(location);
+        if (cachedMtime === mtime) continue; // no change
+
+        // Remove old sections for this memory file from skills array
+        this.skills = this.skills.filter(
+          (s) => !s.location.startsWith(location + "#")
+        );
+        if (this.cache) {
+          for (const key of Object.keys(this.cache.skills)) {
+            if (key.startsWith(location + "#")) delete this.cache.skills[key];
+          }
+        }
+
+        try {
+          const raw = await readFile(location, "utf-8");
+          const sections = parseMemoryFile(raw, location);
+          for (const section of sections) {
+            const sectionKey = `${location}#${section.name}`;
+            const queries = section.queries.length > 0 ? section.queries : [section.description];
+            toEmbed.push({
+              name: section.name,
+              description: section.description,
+              location: sectionKey,
+              queries,
+              type: "memory",
+              mtime,
+            });
+          }
+        } catch {
+          // Skip unreadable
+        }
+        this.skillMtimes.set(location, mtime);
+        continue;
+      }
+
+      // --- Skill files (SKILL.md) ---
       // Check if cache has a valid entry
       const cached = this.cache?.skills[location];
       if (cached && cached.mtime === mtime) {
@@ -244,11 +369,17 @@ export class SkillIndex {
       }
     }
 
-    // Remove deleted skills
-    this.skills = this.skills.filter((s) => currentLocations.has(s.location));
+    // Remove deleted skills (handle memory section keys like "path#SectionName")
+    this.skills = this.skills.filter((s) => {
+      const baseLocation = s.location.includes("#")
+        ? s.location.split("#")[0]
+        : s.location;
+      return currentLocations.has(baseLocation) || currentLocations.has(s.location);
+    });
     if (this.cache) {
       for (const key of Object.keys(this.cache.skills)) {
-        if (!currentLocations.has(key)) {
+        const baseKey = key.includes("#") ? key.split("#")[0] : key;
+        if (!currentLocations.has(baseKey) && !currentLocations.has(key)) {
           delete this.cache.skills[key];
         }
       }
@@ -310,6 +441,15 @@ export class SkillIndex {
   }
 
   async readSkillContent(location: string): Promise<string> {
+    // Handle memory file sections (location is "path#SectionName")
+    if (location.includes("#")) {
+      const [filePath, sectionName] = location.split("#", 2);
+      const raw = await readFile(filePath, "utf-8");
+      const sections = parseMemoryFile(raw, filePath);
+      const section = sections.find((s) => s.name === sectionName);
+      return section?.body.trim() || "";
+    }
+
     const raw = await readFile(location, "utf-8");
     const { body } = parseFrontmatter(raw);
     return body.trim();

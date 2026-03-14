@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/skill-router",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Vector-based skill router for OpenClaw — injects relevant skills per-turn using embedding similarity",
   "license": "MIT",
   "author": "General-ML",

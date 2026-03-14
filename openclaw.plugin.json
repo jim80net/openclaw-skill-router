@@ -2,7 +2,7 @@
   "id": "skill-router",
   "name": "Skill Router",
   "description": "Vector-based skill router that injects relevant skills per-turn using embedding similarity search with graduated disclosure",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -37,11 +37,16 @@
         "items": { "type": "string" },
         "description": "Additional skill directories to index (workspace skills/ is always included)"
       },
+      "memoryDirs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Directories to scan for memory .md files (## sections with optional Triggers: lines)"
+      },
       "types": {
         "type": "array",
         "items": {
           "type": "string",
-          "enum": ["skill", "memory", "rule", "workflow", "tool-guidance", "session-learning"]
+          "enum": ["skill", "memory", "rule", "workflow", "tool-guidance", "session-learning", "stop-rule"]
         },
         "default": ["skill", "memory", "workflow", "session-learning", "rule"],
         "description": "Knowledge types to include in routing"
@@ -57,6 +62,7 @@
     "embeddingModel": { "label": "Embedding model" },
     "embeddingBackend": { "label": "Embedding backend (openai or local)" },
     "maxInjectedChars": { "label": "Max characters to inject" },
+    "memoryDirs": { "label": "Memory directories to scan (.md files)" },
     "types": { "label": "Knowledge types to route" }
   }
 }

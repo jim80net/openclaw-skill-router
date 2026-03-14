@@ -272,5 +272,5 @@ export default function register(api: OpenClawPluginApi): void {
     (cleanupInterval as NodeJS.Timeout).unref();
   }
 
-  api.logger.info("Skill router v0.3.0: registered (before_prompt_build + before_tool_call + agent_end hooks)");
+  api.logger.info("Skill router v0.5.0: registered (before_prompt_build + before_tool_call + agent_end hooks)");
 }

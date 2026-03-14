@@ -13,6 +13,7 @@ export type SkillRouterConfig = {
   maxInjectedChars: number;
   cacheTimeMs: number;
   skillDirs?: string[];
+  memoryDirs?: string[];
   types: SkillType[];
 };
 
@@ -61,6 +62,9 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRout
         : DEFAULT_CONFIG.cacheTimeMs,
     skillDirs: Array.isArray(pluginConfig.skillDirs)
       ? pluginConfig.skillDirs.map(String)
+      : undefined,
+    memoryDirs: Array.isArray(pluginConfig.memoryDirs)
+      ? pluginConfig.memoryDirs.map(String)
       : undefined,
     types: Array.isArray(pluginConfig.types)
       ? (pluginConfig.types as SkillType[])

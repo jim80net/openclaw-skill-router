@@ -19,7 +19,8 @@ export type SkillType =
   | "tool-guidance"
   | "workflow"
   | "session-learning"
-  | "rule";
+  | "rule"
+  | "stop-rule";
 
 // ---------------------------------------------------------------------------
 // Indexed skill

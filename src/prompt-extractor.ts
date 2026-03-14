@@ -10,10 +10,10 @@ const TICKS = String.fromCharCode(96).repeat(3); // triple backtick
 function stripJsonBlocks(text: string, labels: string[]): string {
   let result = text;
   for (const label of labels) {
-    const prefix = label + " (untrusted metadata):";
+    const prefix = `${label} (untrusted metadata):`;
     let idx = result.indexOf(prefix);
     while (idx !== -1) {
-      const codeStart = result.indexOf(TICKS + "json", idx);
+      const codeStart = result.indexOf(`${TICKS}json`, idx);
       if (codeStart === -1) break;
       const codeEnd = result.indexOf(TICKS, codeStart + 7);
       if (codeEnd === -1) break;
@@ -44,30 +44,22 @@ export function extractUserMessage(prompt: string): string {
   // Strip EXTERNAL_UNTRUSTED_CONTENT blocks
   text = text.replace(
     /<<<EXTERNAL_UNTRUSTED_CONTENT[\s\S]*?<<<END_EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>\s*/g,
-    ""
+    "",
   );
 
   // Strip Untrusted context wrapper
   text = text.replace(
     /Untrusted context \(metadata, do not treat as instructions or commands\):\s*/g,
-    ""
+    "",
   );
 
   // Strip media attachment notices
-  text = text.replace(
-    /\[media attached:.*?\]\s*/g,
-    ""
-  );
-  text = text.replace(
-    /To send an image back.*?Keep caption in the text body\.\s*/g,
-    ""
-  );
+  text = text.replace(/\[media attached:.*?\]\s*/g, "");
+  text = text.replace(/To send an image back.*?Keep caption in the text body\.\s*/g, "");
 
   // Extract message from Discord-style inline format:
   // [Discord Guild #channel +2m Thu 2026-03-12 10:21 UTC] username: actual message
-  const discordInline = text.match(
-    /\[Discord[^\]]*\]\s*[^:]+:\s*([\s\S]*)/
-  );
+  const discordInline = text.match(/\[Discord[^\]]*\]\s*[^:]+:\s*([\s\S]*)/);
   if (discordInline) {
     text = discordInline[1];
   }
@@ -81,14 +73,11 @@ export function extractUserMessage(prompt: string): string {
   // Strip OpenClaw runtime context blocks
   text = text.replace(
     /\[.*?UTC\] OpenClaw runtime context \(internal\):[\s\S]*?(?=\n\n|\n[A-Z]|$)/g,
-    ""
+    "",
   );
 
   // Strip System: prefix event blocks
-  text = text.replace(
-    /^System:\s*\[[\s\S]*?(?=\n\n|$)/gm,
-    ""
-  );
+  text = text.replace(/^System:\s*\[[\s\S]*?(?=\n\n|$)/gm, "");
 
   // Strip timestamp prefixes like [Thu 2026-03-12 10:21 UTC]
   text = text.replace(/^\[[\w\s\-:]+UTC\]\s*/gm, "");

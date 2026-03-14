@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdir, writeFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { parseFrontmatter, SkillIndex } from "../src/skill-index.ts";
-import { cosineSimilarity } from "../src/embeddings.ts";
-import type { EmbeddingProvider } from "../src/embeddings.ts";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../src/config.ts";
+import type { EmbeddingProvider } from "../src/embeddings.ts";
+import { cosineSimilarity } from "../src/embeddings.ts";
+import { parseFrontmatter, SkillIndex } from "../src/skill-index.ts";
 
 // Mock homedir to isolate from real ~/.openclaw/workspace/skills
 vi.mock("node:os", async () => {
@@ -191,12 +191,12 @@ describe("SkillIndex", () => {
   // Mock embedding provider
   function makeMockProvider(embedFn?: (texts: string[]) => Promise<number[][]>): EmbeddingProvider {
     return {
-      embed: embedFn ?? vi.fn(async (texts: string[]) => {
-        // Return distinct unit vectors: skill i -> [0,...,1,...,0] at position i%4
-        return texts.map((_, i) =>
-          Array.from({ length: 4 }, (__, j) => (j === i % 4 ? 1 : 0))
-        );
-      }),
+      embed:
+        embedFn ??
+        vi.fn(async (texts: string[]) => {
+          // Return distinct unit vectors: skill i -> [0,...,1,...,0] at position i%4
+          return texts.map((_, i) => Array.from({ length: 4 }, (__, j) => (j === i % 4 ? 1 : 0)));
+        }),
     };
   }
 
@@ -207,11 +207,11 @@ describe("SkillIndex", () => {
 
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: weather\ndescription: Get current weather and forecasts\n---\n# Weather\n\nFetch weather data.`
+      `---\nname: weather\ndescription: Get current weather and forecasts\n---\n# Weather\n\nFetch weather data.`,
     );
     await writeFile(
       join(workspaceDir, "skills", "git", "SKILL.md"),
-      `---\nname: git\ndescription: Git version control operations\n---\n# Git\n\nGit commands.`
+      `---\nname: git\ndescription: Git version control operations\n---\n# Git\n\nGit commands.`,
     );
   });
 
@@ -235,7 +235,7 @@ describe("SkillIndex", () => {
   it("uses frontmatter queries when present", async () => {
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: weather\ndescription: Get weather\nqueries:\n  - "What is the weather?"\n  - "Will it rain?"\n  - "Temperature today"\n---\n# Weather`
+      `---\nname: weather\ndescription: Get weather\nqueries:\n  - "What is the weather?"\n  - "Will it rain?"\n  - "Temperature today"\n---\n# Weather`,
     );
     const provider = makeMockProvider();
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, provider);
@@ -250,12 +250,16 @@ describe("SkillIndex", () => {
   it("parses type from frontmatter and filters by type", async () => {
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: pnpm-rule\ndescription: Use pnpm\ntype: rule\none-liner: Use pnpm, not npm.\n---\nAlways use pnpm.`
+      `---\nname: pnpm-rule\ndescription: Use pnpm\ntype: rule\none-liner: Use pnpm, not npm.\n---\nAlways use pnpm.`,
     );
     // weather(rule) + git(skill) = 2 skills, 2 descriptions
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ]) // build
         .mockResolvedValueOnce([[1, 0, 0, 0]]), // search — matches the rule
     };
 
@@ -276,7 +280,7 @@ describe("SkillIndex", () => {
   it("needsRebuild returns false immediately after build", async () => {
     const index = new SkillIndex(
       { ...DEFAULT_CONFIG, enabled: true, cacheTimeMs: 60_000 },
-      makeMockProvider()
+      makeMockProvider(),
     );
     await index.build(workspaceDir);
     expect(index.needsRebuild()).toBe(false);
@@ -285,7 +289,7 @@ describe("SkillIndex", () => {
   it("needsRebuild returns true after cacheTimeMs elapses", async () => {
     const index = new SkillIndex(
       { ...DEFAULT_CONFIG, enabled: true, cacheTimeMs: 0 },
-      makeMockProvider()
+      makeMockProvider(),
     );
     await index.build(workspaceDir);
     expect(index.needsRebuild()).toBe(true);
@@ -295,7 +299,7 @@ describe("SkillIndex", () => {
     const provider = makeMockProvider();
     const index = new SkillIndex(
       { ...DEFAULT_CONFIG, enabled: true, cacheTimeMs: 60_000 },
-      provider
+      provider,
     );
     await index.build(workspaceDir);
     await index.build(workspaceDir);
@@ -306,10 +310,14 @@ describe("SkillIndex", () => {
 
   it("search returns results above threshold", async () => {
     // Build: 2 skills get embeddings [1,0,0,0] and [0,1,0,0]
-    const provider = makeMockProvider();
+    const _provider = makeMockProvider();
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ]) // build
         .mockResolvedValueOnce([[1, 0, 0, 0]]), // search — matches skill 0
     };
 
@@ -323,8 +331,12 @@ describe("SkillIndex", () => {
 
   it("search filters results below threshold", async () => {
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]])
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ])
         .mockResolvedValueOnce([[1, 0, 0, 0]]),
     };
 
@@ -338,8 +350,12 @@ describe("SkillIndex", () => {
 
   it("search returns skills sorted by score descending", async () => {
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]])
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ])
         .mockResolvedValueOnce([[0.8, 0.2, 0, 0]]),
     };
 
@@ -353,8 +369,12 @@ describe("SkillIndex", () => {
 
   it("search respects topK limit", async () => {
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]])
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ])
         .mockResolvedValueOnce([[1, 1, 0, 0]]),
     };
 
@@ -370,14 +390,18 @@ describe("SkillIndex", () => {
     // Query is [1,0,0,0] → similarities are 1.0 and 0.0
     // Max should give 1.0, avg would give 0.5
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 0, 0, 1]]) // build: 2 query embeddings for 1 skill
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 0, 0, 1],
+        ]) // build: 2 query embeddings for 1 skill
         .mockResolvedValueOnce([[1, 0, 0, 0]]), // search
     };
 
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: weather\ndescription: Get weather\nqueries:\n  - "What is the weather?"\n  - "Temperature"\n---\n# Weather`
+      `---\nname: weather\ndescription: Get weather\nqueries:\n  - "What is the weather?"\n  - "Temperature"\n---\n# Weather`,
     );
     // Remove git skill to have exactly 1 skill with 2 queries
     await rm(join(workspaceDir, "skills", "git"), { recursive: true, force: true });
@@ -394,13 +418,17 @@ describe("SkillIndex", () => {
   it("search filters by type", async () => {
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: weather-mem\ndescription: Weather memory\ntype: memory\n---\nI like rain.`
+      `---\nname: weather-mem\ndescription: Weather memory\ntype: memory\n---\nI like rain.`,
     );
     // git stays as default type (skill)
 
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]])
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ])
         .mockResolvedValueOnce([[1, 1, 0, 0]]), // matches both
     };
 
@@ -414,8 +442,10 @@ describe("SkillIndex", () => {
 
   it("returns empty for search with no matching type", async () => {
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]),
+      embed: vi.fn().mockResolvedValueOnce([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+      ]),
     };
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
@@ -442,7 +472,7 @@ describe("SkillIndex", () => {
     await index.build(workspaceDir);
 
     const content = await index.readSkillContent(
-      join(workspaceDir, "skills", "weather", "SKILL.md")
+      join(workspaceDir, "skills", "weather", "SKILL.md"),
     );
     expect(content).toContain("# Weather");
     expect(content).not.toContain("---");
@@ -451,7 +481,7 @@ describe("SkillIndex", () => {
   it("skips skills with missing name or description", async () => {
     await writeFile(
       join(workspaceDir, "skills", "weather", "SKILL.md"),
-      `---\nname: weather\n---\n# Missing description`
+      `---\nname: weather\n---\n# Missing description`,
     );
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, makeMockProvider());
@@ -468,15 +498,19 @@ describe("SkillIndex", () => {
     // Two skills: embeddings [1,0,0,0] and [0.9,0.1,0,0]
     // Query [1,0,0,0] → scores ~1.0 and ~0.9 — both within maxDropoff=0.15
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0.9, 0.1, 0, 0]]) // build
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0.9, 0.1, 0, 0],
+        ]) // build
         .mockResolvedValueOnce([[1, 0, 0, 0]]), // search
     };
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
     await index.build(workspaceDir);
 
-    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    const results = await index.search("test", 3, 0.3, undefined, "relative", 0.15);
     expect(results).toHaveLength(2);
   });
 
@@ -484,15 +518,19 @@ describe("SkillIndex", () => {
     // Two skills: embeddings [1,0,0,0] and [0,1,0,0]
     // Query [0,0,1,0] → scores 0.0 and 0.0 — below floor
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ]) // build
         .mockResolvedValueOnce([[0, 0, 1, 0]]), // search — orthogonal
     };
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
     await index.build(workspaceDir);
 
-    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    const results = await index.search("test", 3, 0.3, undefined, "relative", 0.15);
     expect(results).toHaveLength(0);
   });
 
@@ -501,30 +539,38 @@ describe("SkillIndex", () => {
     // Query [0.95,0.05,0,0] → score ~0.998 for skill 0, ~0.05 for skill 1
     // maxDropoff=0.15 → skill 1 drops (gap ~0.95)
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0, 1, 0, 0]]) // build
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0, 1, 0, 0],
+        ]) // build
         .mockResolvedValueOnce([[0.95, 0.05, 0, 0]]), // search
     };
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
     await index.build(workspaceDir);
 
-    const results = await index.search("test", 3, 0.30, undefined, "relative", 0.15);
+    const results = await index.search("test", 3, 0.3, undefined, "relative", 0.15);
     expect(results).toHaveLength(1);
     expect(results[0].score).toBeGreaterThan(0.9);
   });
 
   it("relative mode: respects topK limit", async () => {
     const searchProvider: EmbeddingProvider = {
-      embed: vi.fn()
-        .mockResolvedValueOnce([[1, 0, 0, 0], [0.95, 0.05, 0, 0]]) // build — close scores
+      embed: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [1, 0, 0, 0],
+          [0.95, 0.05, 0, 0],
+        ]) // build — close scores
         .mockResolvedValueOnce([[1, 0, 0, 0]]), // search
     };
 
     const index = new SkillIndex({ ...DEFAULT_CONFIG, enabled: true }, searchProvider);
     await index.build(workspaceDir);
 
-    const results = await index.search("test", 1, 0.30, undefined, "relative", 0.15);
+    const results = await index.search("test", 1, 0.3, undefined, "relative", 0.15);
     expect(results).toHaveLength(1);
   });
 });

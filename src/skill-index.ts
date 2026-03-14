@@ -1,12 +1,12 @@
-import { readdir, readFile, stat, access } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { cosineSimilarity } from "./embeddings.ts";
-import type { EmbeddingProvider } from "./embeddings.ts";
-import type { SkillRouterConfig } from "./config.ts";
-import type { IndexedSkill, SkillSearchResult, SkillType, ParsedFrontmatter } from "./types.ts";
-import { loadCache, saveCache, toCachedSkill, fromCachedSkill } from "./cache.ts";
+import { join } from "node:path";
 import type { CacheData } from "./cache.ts";
+import { fromCachedSkill, loadCache, saveCache, toCachedSkill } from "./cache.ts";
+import type { SkillRouterConfig } from "./config.ts";
+import type { EmbeddingProvider } from "./embeddings.ts";
+import { cosineSimilarity } from "./embeddings.ts";
+import type { IndexedSkill, ParsedFrontmatter, SkillSearchResult, SkillType } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Frontmatter parsing
@@ -29,9 +29,7 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
     if (currentListKey) {
       const listItem = line.match(/^\s+-\s+(.*)/);
       if (listItem) {
-        listAccumulators[currentListKey].push(
-          listItem[1].replace(/^["']|["']$/g, "").trim()
-        );
+        listAccumulators[currentListKey].push(listItem[1].replace(/^["']|["']$/g, "").trim());
         continue;
       }
       currentListKey = "";
@@ -73,7 +71,7 @@ function parseFrontmatter(content: string): { meta: ParsedFrontmatter; body: str
  */
 export function parseMemoryFile(
   content: string,
-  _filePath: string
+  _filePath: string,
 ): Array<{ name: string; description: string; queries: string[]; body: string }> {
   const results: Array<{ name: string; description: string; queries: string[]; body: string }> = [];
 
@@ -182,7 +180,7 @@ export class SkillIndex {
 
   constructor(
     private config: SkillRouterConfig,
-    private provider: EmbeddingProvider
+    private provider: EmbeddingProvider,
   ) {}
 
   get skillCount(): number {
@@ -238,12 +236,8 @@ export class SkillIndex {
     // Check for changes
     const currentLocations = new Set(statResults.map((s) => s.location));
     const anyNew = statResults.some((s) => !this.skillMtimes.has(s.location));
-    const anyChanged = statResults.some(
-      (s) => this.skillMtimes.get(s.location) !== s.mtime
-    );
-    const anyDeleted = [...this.skillMtimes.keys()].some(
-      (loc) => !currentLocations.has(loc)
-    );
+    const anyChanged = statResults.some((s) => this.skillMtimes.get(s.location) !== s.mtime);
+    const anyDeleted = [...this.skillMtimes.keys()].some((loc) => !currentLocations.has(loc));
 
     if (this.buildTime > 0 && !anyNew && !anyChanged && !anyDeleted) {
       this.buildTime = Date.now();
@@ -270,12 +264,10 @@ export class SkillIndex {
         if (cachedMtime === mtime) continue; // no change
 
         // Remove old sections for this memory file from skills array
-        this.skills = this.skills.filter(
-          (s) => !s.location.startsWith(location + "#")
-        );
+        this.skills = this.skills.filter((s) => !s.location.startsWith(`${location}#`));
         if (this.cache) {
           for (const key of Object.keys(this.cache.skills)) {
-            if (key.startsWith(location + "#")) delete this.cache.skills[key];
+            if (key.startsWith(`${location}#`)) delete this.cache.skills[key];
           }
         }
 
@@ -371,9 +363,7 @@ export class SkillIndex {
 
     // Remove deleted skills (handle memory section keys like "path#SectionName")
     this.skills = this.skills.filter((s) => {
-      const baseLocation = s.location.includes("#")
-        ? s.location.split("#")[0]
-        : s.location;
+      const baseLocation = s.location.includes("#") ? s.location.split("#")[0] : s.location;
       return currentLocations.has(baseLocation) || currentLocations.has(s.location);
     });
     if (this.cache) {
@@ -404,7 +394,7 @@ export class SkillIndex {
     threshold: number,
     typeFilter?: SkillType[],
     scoringMode: "relative" | "absolute" = "absolute",
-    maxDropoff: number = 0.15
+    maxDropoff: number = 0.15,
   ): Promise<SkillSearchResult[]> {
     let candidates = this.skills;
     if (typeFilter && typeFilter.length > 0) {
@@ -429,15 +419,11 @@ export class SkillIndex {
       // but drop results that fall too far below the best
       if (sorted.length === 0 || sorted[0].score < threshold) return [];
       const bestScore = sorted[0].score;
-      return sorted
-        .filter((r) => bestScore - r.score <= maxDropoff)
-        .slice(0, topK);
+      return sorted.filter((r) => bestScore - r.score <= maxDropoff).slice(0, topK);
     }
 
     // Absolute mode (legacy): each result must individually pass threshold
-    return sorted
-      .filter((r) => r.score >= threshold)
-      .slice(0, topK);
+    return sorted.filter((r) => r.score >= threshold).slice(0, topK);
   }
 
   async readSkillContent(location: string): Promise<string> {
@@ -456,6 +442,6 @@ export class SkillIndex {
   }
 }
 
+export type { ParsedFrontmatter };
 // Export for testing
 export { parseFrontmatter };
-export type { ParsedFrontmatter };

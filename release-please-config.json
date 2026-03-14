@@ -1,0 +1,15 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "openclaw.plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

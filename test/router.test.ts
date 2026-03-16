@@ -1,15 +1,14 @@
+import type { IndexedSkill, Logger, SkillIndex, SkillSearchResult } from "@jim80net/memex-core";
+import { InMemorySessionTracker } from "@jim80net/memex-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../src/config.ts";
 import { createRouter } from "../src/router.ts";
-import { SessionTracker } from "../src/session.ts";
-import type { SkillIndex } from "../src/skill-index.ts";
-import type { IndexedSkill, SkillSearchResult } from "../src/types.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeLogger() {
+function makeLogger(): Logger {
   return {
     info: vi.fn(),
     warn: vi.fn(),
@@ -44,15 +43,21 @@ function makeSkill(overrides: Partial<IndexedSkill> = {}): IndexedSkill {
 const BASE_EVENT = { prompt: "how do I check the weather?", messages: [] };
 const BASE_CONTEXT = { workspaceDir: "/fake/workspace", sessionId: "test-session-1" };
 
+const MOCK_BUILD_SCAN_DIRS = (workspaceDir: string) => ({
+  skillDirs: [`${workspaceDir}/skills`],
+  memoryDirs: [],
+  ruleDirs: [],
+});
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("createRouter", () => {
-  let sessionTracker: SessionTracker;
+  let sessionTracker: InMemorySessionTracker;
 
   beforeEach(() => {
-    sessionTracker = new SessionTracker();
+    sessionTracker = new InMemorySessionTracker();
   });
 
   it("returns undefined when config.enabled is false", async () => {
@@ -99,11 +104,16 @@ describe("createRouter", () => {
       { ...DEFAULT_CONFIG, enabled: true },
       logger,
       sessionTracker,
+      { buildScanDirs: MOCK_BUILD_SCAN_DIRS },
     );
 
     await router(BASE_EVENT, BASE_CONTEXT);
 
-    expect(index.build).toHaveBeenCalledWith("/fake/workspace");
+    expect(index.build).toHaveBeenCalledWith({
+      skillDirs: ["/fake/workspace/skills"],
+      memoryDirs: [],
+      ruleDirs: [],
+    });
   });
 
   it("skips rebuild when workspaceDir is not available", async () => {
@@ -117,6 +127,7 @@ describe("createRouter", () => {
       { ...DEFAULT_CONFIG, enabled: true },
       logger,
       sessionTracker,
+      { buildScanDirs: MOCK_BUILD_SCAN_DIRS },
     );
 
     await router(BASE_EVENT, {});
@@ -223,7 +234,7 @@ describe("createRouter", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Graduated disclosure: Rules (full → one-liner)
+  // Graduated disclosure: Rules (full -> one-liner)
   // -----------------------------------------------------------------------
 
   it("injects full body for rule on first match", async () => {
@@ -400,6 +411,7 @@ describe("createRouter", () => {
       { ...DEFAULT_CONFIG, enabled: true },
       logger,
       sessionTracker,
+      { buildScanDirs: MOCK_BUILD_SCAN_DIRS },
     );
 
     const result = await router(BASE_EVENT, BASE_CONTEXT);
@@ -473,52 +485,5 @@ describe("createRouter", () => {
     const result = await router({ prompt: "HEARTBEAT_OK", messages: [] }, BASE_CONTEXT);
     expect(result).toBeUndefined();
     expect(index.search).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// SessionTracker
-// ---------------------------------------------------------------------------
-
-describe("SessionTracker", () => {
-  it("returns false for unseen rules", () => {
-    const tracker = new SessionTracker();
-    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(false);
-  });
-
-  it("returns true after marking a rule shown", () => {
-    const tracker = new SessionTracker();
-    tracker.markRuleShown("s1", "/rule.md");
-    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(true);
-  });
-
-  it("tracks rules per session independently", () => {
-    const tracker = new SessionTracker();
-    tracker.markRuleShown("s1", "/rule.md");
-    expect(tracker.hasRuleBeenShown("s2", "/rule.md")).toBe(false);
-  });
-
-  it("clears session state", () => {
-    const tracker = new SessionTracker();
-    tracker.markRuleShown("s1", "/rule.md");
-    tracker.clearSession("s1");
-    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(false);
-  });
-
-  it("cleanup removes stale sessions", async () => {
-    const tracker = new SessionTracker();
-    tracker.markRuleShown("s1", "/rule.md");
-    // Wait 10ms so the entry becomes stale with maxAge=1
-    await new Promise((r) => setTimeout(r, 10));
-    tracker.cleanup(1);
-    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(false);
-  });
-
-  it("cleanup keeps recently accessed sessions", () => {
-    const tracker = new SessionTracker();
-    tracker.markRuleShown("s1", "/rule.md");
-    // Cleanup with very large maxAge should keep everything
-    tracker.cleanup(999_999_999);
-    expect(tracker.hasRuleBeenShown("s1", "/rule.md")).toBe(true);
   });
 });

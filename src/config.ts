@@ -1,23 +1,12 @@
-import type { SkillType } from "./types.ts";
+import type { MemexCoreConfig, SkillType } from "@jim80net/memex-core";
+import { DEFAULT_CORE_CONFIG } from "@jim80net/memex-core";
 
-export type ScoringMode = "relative" | "absolute";
+export type { ScoringMode } from "@jim80net/memex-core";
 
-export type SkillRouterConfig = {
-  enabled: boolean;
-  topK: number;
-  threshold: number;
-  scoringMode: ScoringMode;
-  maxDropoff: number;
-  embeddingModel: string;
-  embeddingBackend: "openai" | "local";
-  maxInjectedChars: number;
-  cacheTimeMs: number;
-  skillDirs?: string[];
-  memoryDirs?: string[];
-  types: SkillType[];
-};
+export type SkillRouterConfig = MemexCoreConfig;
 
 export const DEFAULT_CONFIG: SkillRouterConfig = {
+  ...DEFAULT_CORE_CONFIG,
   enabled: false,
   topK: 3,
   threshold: 0.35, // floor: best match must clear this to inject anything
@@ -28,6 +17,8 @@ export const DEFAULT_CONFIG: SkillRouterConfig = {
   maxInjectedChars: 8000,
   cacheTimeMs: 300_000, // 5 min
   types: ["skill", "memory", "workflow", "session-learning", "rule"],
+  skillDirs: [],
+  memoryDirs: [],
 };
 
 export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRouterConfig {
@@ -60,10 +51,10 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): SkillRout
         : DEFAULT_CONFIG.cacheTimeMs,
     skillDirs: Array.isArray(pluginConfig.skillDirs)
       ? pluginConfig.skillDirs.map(String)
-      : undefined,
+      : DEFAULT_CONFIG.skillDirs,
     memoryDirs: Array.isArray(pluginConfig.memoryDirs)
       ? pluginConfig.memoryDirs.map(String)
-      : undefined,
+      : DEFAULT_CONFIG.memoryDirs,
     types: Array.isArray(pluginConfig.types)
       ? (pluginConfig.types as SkillType[])
       : DEFAULT_CONFIG.types,

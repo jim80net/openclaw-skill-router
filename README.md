@@ -1,10 +1,24 @@
-# @openclaw/skill-router
+# @jim80net/memex-openclaw
 
-**Teach your agent new tricks — without rewriting prompts.**
+Semantic skill, memory, and rule router for [OpenClaw](https://github.com/General-ML/openclaw). Injects relevant knowledge into your agent's session based on what it's actually working on, instead of loading everything at once.
 
-The skill router is an [OpenClaw](https://github.com/General-ML/openclaw) plugin that gives your agent a long-term knowledge base. Write skills as plain Markdown files, drop them in a folder, and the router automatically surfaces the right ones each turn using vector similarity.
+Built on [`@jim80net/memex-core`](https://github.com/jim80net/memex-core) — the shared engine for embedding, indexing, and searching knowledge artifacts.
 
-No prompt engineering. No manual tool wiring. Just write what the agent should know, and the router handles the rest.
+## Why this exists
+
+AI coding assistants are essentially paint-by-number systems. You start with a canvas (the model) and a system prompt (the outline of the picture). Then you add your own directives — skills, memories, rules — which are like adding more lines to the coloring book before you begin.
+
+This works well at first. But as you accumulate knowledge — git workflows, ticket tracking conventions, deployment procedures, coding standards, domain-specific patterns — the coloring page gets crowded. Every session starts with *all* of this context loaded, whether it's relevant or not. The LLM's attention is split across git rules when you're debugging CSS, and deployment procedures when you're writing tests. Performance degrades as the corpus grows.
+
+The solution is **gradual disclosure**: start with universal principles only, then bring in additional directives at the point of consumption, when the conversation actually turns toward those specific tasks. When you need to trade a ticker, the relevant know-how appears. When you're deploying, the deployment checklist surfaces. When you're just writing code, nothing extra clutters the context.
+
+This is what memex-openclaw does. As skills, memories, and rules are created, they are embedded for semantic retrieval. Each type has a disclosure pattern suited to its nature:
+
+- **Skills** — large procedural checklists — are gradually disclosed: a description teaser first, then the full `SKILL.md` when the agent chooses to use it.
+- **Memories** — generally small preferences and facts — are disclosed in full at the moment they become relevant.
+- **Rules** — important guidelines — are disclosed in full when first relevant, then reduced to one-line reminders on subsequent matches, keeping them present without dominating the context.
+
+The result is a system that drives the conversation according to the task at hand. Performance stays consistent even as learnings amass, because the context window carries only what's needed right now.
 
 ## How it works
 
@@ -12,9 +26,9 @@ No prompt engineering. No manual tool wiring. Just write what the agent should k
 User message ──→ embed ──→ cosine search ──→ inject top matches into prompt
 ```
 
-1. **Index** — On startup, the plugin scans your skill directories for `SKILL.md` files. Each skill's description is embedded into a vector and cached to disk.
-2. **Match** — On every agent turn, the user's message is embedded and compared against the index. Skills above a similarity threshold are selected.
-3. **Inject** — Matched skills are prepended to the prompt context so the agent can act on them immediately.
+1. **Index** — On startup, the plugin scans your skill directories for `SKILL.md` files and memory directories for `.md` files. Each entry's description is embedded into a vector and cached to disk.
+2. **Match** — On every agent turn, the user's message is embedded and compared against the index. Entries above a similarity threshold are selected.
+3. **Inject** — Matched entries are prepended to the prompt context so the agent can act on them immediately.
 
 The plugin also hooks into `before_tool_call` to inject tool-specific guidance, and `agent_end` to capture execution traces for later analysis.
 
@@ -22,9 +36,9 @@ The plugin also hooks into `before_tool_call` to inject tool-specific guidance, 
 
 ```bash
 # Install and enable
-openclaw plugins install --link /path/to/openclaw-skill-router
-openclaw plugins enable skill-router
-openclaw config set plugins.entries.skill-router.config.enabled true
+openclaw plugins install --link /path/to/memex-openclaw
+openclaw plugins enable memex-openclaw
+openclaw config set plugins.entries.memex-openclaw.config.enabled true
 openclaw gateway restart
 ```
 
@@ -33,7 +47,7 @@ By default, the router uses **local ONNX embeddings** (via `@huggingface/transfo
 To use OpenAI embeddings instead:
 
 ```bash
-openclaw config set plugins.entries.skill-router.config.embeddingBackend openai
+openclaw config set plugins.entries.memex-openclaw.config.embeddingBackend openai
 openclaw config set env.vars.OPENAI_API_KEY "sk-..."
 openclaw gateway restart
 ```
@@ -78,23 +92,35 @@ queries:             # extra embedding vectors for better matching
 
 ## Configuration
 
-All settings live under `plugins.entries.skill-router.config` in your OpenClaw config:
+All settings live under `plugins.entries.memex-openclaw.config` in your OpenClaw config:
 
 | Key | Default | Description |
 |---|---|---|
 | `enabled` | `false` | Master switch |
 | `topK` | `3` | Max skills injected per turn |
-| `threshold` | `0.55` | Min cosine similarity (0–1) |
+| `threshold` | `0.35` | Floor score — best match must clear this (0–1) |
+| `scoringMode` | `"relative"` | `"relative"` or `"absolute"` scoring |
+| `maxDropoff` | `0.1` | In relative mode, drop results scoring too far below the best |
 | `embeddingBackend` | `"local"` | `"local"` (ONNX, free) or `"openai"` |
 | `embeddingModel` | `"Xenova/all-MiniLM-L6-v2"` | Model name (local) or OpenAI model ID |
 | `maxInjectedChars` | `8000` | Character budget per turn |
 | `cacheTimeMs` | `300000` | Index rebuild interval (ms) |
-| `skillDirs` | — | Additional directories to scan |
+| `skillDirs` | `[]` | Additional directories to scan for skills |
+| `memoryDirs` | `[]` | Directories to scan for memory `.md` files |
 | `types` | all | Knowledge types to route |
+
+## Architecture
+
+- **`@jim80net/memex-core`** — Shared engine: embeddings (ONNX + OpenAI), skill index, cache, session tracking, telemetry, traces
+- **`src/config.ts`** — OpenClaw-specific config resolution extending `MemexCoreConfig`
+- **`src/router.ts`** — Graduated disclosure logic (rules, memories, skills)
+- **`src/index.ts`** — Plugin entry point: constructs core objects, registers hooks
+- **`src/prompt-extractor.ts`** — Strips OpenClaw/Discord envelope metadata
 
 ## Features
 
 - **Zero-cost by default** — Local ONNX embeddings, no API calls needed
+- **Shared core** — Same engine as [memex-claude](https://github.com/jim80net/memex-claude), published as `@jim80net/memex-core`
 - **Persistent cache** — Embeddings are cached to disk keyed by model + file mtime; survives restarts
 - **Graduated disclosure** — Rules show full text on first exposure, then brief reminders
 - **Tool guidance** — Hooks into `before_tool_call` to inject tool-specific instructions
@@ -108,6 +134,7 @@ All settings live under `plugins.entries.skill-router.config` in your OpenClaw c
 pnpm install          # see note below if onnxruntime postinstall fails
 pnpm test             # vitest
 pnpm run typecheck    # tsc --noEmit
+pnpm check            # lint + typecheck + test
 ```
 
 > **Note:** If `pnpm install` fails due to `onnxruntime-node` CUDA postinstall errors, run `pnpm install --ignore-scripts` instead. The ONNX runtime is only needed at plugin runtime, not for development.

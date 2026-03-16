@@ -2,25 +2,21 @@ import type {
   IndexedSkill,
   Logger,
   ScanDirs,
+  SessionTracker,
   SkillIndex,
   SkillSearchResult,
+  TraceAccumulator,
 } from "@jim80net/memex-core";
-import {
-  loadTelemetry,
-  recordMatch,
-  type SessionTracker,
-  saveTelemetry,
-  type TraceAccumulator,
-} from "@jim80net/memex-core";
+import { loadTelemetry, recordMatch, saveTelemetry } from "@jim80net/memex-core";
 import type { SkillRouterConfig } from "./config.ts";
 import { extractUserMessage } from "./prompt-extractor.ts";
 
-type HookEvent = {
+export type HookEvent = {
   prompt: string;
   messages: unknown[];
 };
 
-type HookContext = {
+export type HookContext = {
   agentId?: string;
   sessionKey?: string;
   sessionId?: string;
@@ -30,7 +26,7 @@ type HookContext = {
 
 type HookResult = { prependContext: string } | undefined;
 
-type RouterOptions = {
+export type RouterOptions = {
   traceAccumulator?: TraceAccumulator;
   telemetryPath?: string;
   buildScanDirs?: (workspaceDir: string) => ScanDirs;

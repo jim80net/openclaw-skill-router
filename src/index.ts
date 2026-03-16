@@ -11,6 +11,7 @@ import {
 import manifest from "../openclaw.plugin.json" with { type: "json" };
 import type { SkillRouterConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
+import type { HookContext, HookEvent } from "./router.ts";
 import { createRouter } from "./router.ts";
 
 // ---------------------------------------------------------------------------
@@ -59,19 +60,6 @@ type OpenClawPluginApi = {
 // ---------------------------------------------------------------------------
 // Hook event/context types
 // ---------------------------------------------------------------------------
-
-type PromptBuildEvent = {
-  prompt: string;
-  messages: unknown[];
-};
-
-type PromptBuildContext = {
-  agentId?: string;
-  sessionKey?: string;
-  sessionId?: string;
-  workspaceDir?: string;
-  messageProvider?: unknown;
-};
 
 type ToolCallEvent = {
   toolName: string;
@@ -182,7 +170,7 @@ export default function register(api: OpenClawPluginApi): void {
   // --- Hook: before_prompt_build ---
   // Main hook: semantic skill routing per-turn
   api.on("before_prompt_build", async (event: unknown, context: unknown) => {
-    return router(event as PromptBuildEvent, context as PromptBuildContext);
+    return router(event as HookEvent, context as HookContext);
   });
 
   // --- Hook: before_tool_call ---

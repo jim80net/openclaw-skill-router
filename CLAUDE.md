@@ -19,7 +19,7 @@ pnpm check                      # lint + typecheck + test
 - `src/config.ts` — Extends `MemexCoreConfig` with openclaw-specific defaults and `resolveConfig()` for plugin config
 - `src/router.ts` — Graduated disclosure logic: rules (full then reminder), memories (always full), skills (teaser only)
 - `src/index.ts` — Plugin entry point: constructs core objects, defines openclaw-specific paths, registers hooks (before_prompt_build, before_tool_call, agent_end)
-- `src/prompt-extractor.ts` — Strips OpenClaw/Discord envelope metadata for clean embedding input
+- `src/prompt-extractor.ts` — Strips OpenClaw/Discord envelope metadata for clean embedding input; exports `isHeartbeatPrompt()` to detect and skip keep-alive messages
 - `test/` — Vitest tests for router and prompt-extractor
 
 ### Scan sources
@@ -31,6 +31,8 @@ pnpm check                      # lint + typecheck + test
 
 ### Disclosure model
 
+Frontmatter fields: `name`, `description`, `type`, `one-liner`, `queries`, `boost` (optional float added to similarity score before threshold comparison).
+
 - **Rules**: full content on first match in session, one-liner reminder on subsequent matches
 - **Skills/workflows**: description teaser only; agent reads the SKILL.md if it chooses to use it
 - **Memory**: full content always (they're short)
@@ -39,7 +41,7 @@ pnpm check                      # lint + typecheck + test
 
 All openclaw-specific state lives under `~/.openclaw/cache/`:
 - `skill-router.json` — embedding cache
-- `skill-router-telemetry.json` — match telemetry
+- `skill-router-telemetry.json` — match telemetry (fields: `queryHits` per-query hit counts, `observations` for injected results)
 - `skill-router-traces/` — execution traces
 - `models/` — ONNX model cache
 

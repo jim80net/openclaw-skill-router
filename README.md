@@ -84,6 +84,7 @@ name: weather
 description: "Get current weather and forecasts for any location"
 type: skill          # skill | rule | memory | workflow | session-learning
 one-liner: "Weather lookup guidance"   # shown on repeat exposure (rules)
+boost: 0.05          # optional float added to similarity score before threshold comparison
 queries:             # extra embedding vectors for better matching
   - "what's the weather like"
   - "check the forecast for tomorrow"
@@ -127,6 +128,8 @@ All settings live under `plugins.entries.memex-openclaw.config` in your OpenClaw
 - **Execution traces** — Captures which skills fired and what tools were called for offline analysis
 - **Multi-query matching** — Skills can define multiple query vectors for broader recall
 - **Prompt extraction** — Strips OpenClaw envelope metadata to match on actual user intent
+- **Heartbeat detection** — `isHeartbeatPrompt()` identifies and skips heartbeat prompts so the router avoids telemetry noise from keep-alive messages
+- **Query-attributed telemetry** — Telemetry tracks per-query hit counts (`queryHits`) and only records actually injected results, not all search candidates
 
 ## Development
 

@@ -1,8 +1,6 @@
 import type { MemexCoreConfig, SkillType } from "@jim80net/memex-core";
 import { DEFAULT_CORE_CONFIG } from "@jim80net/memex-core";
 
-export type { ScoringMode } from "@jim80net/memex-core";
-
 export type SkillRouterConfig = MemexCoreConfig;
 
 export const DEFAULT_CONFIG: SkillRouterConfig = {

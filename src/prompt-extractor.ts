@@ -94,3 +94,15 @@ export function extractUserMessage(prompt: string): string {
   // Cap at 500 chars for embedding
   return text.slice(0, 500);
 }
+
+/**
+ * Detect heartbeat prompts that should be skipped by the router.
+ * Checks the raw prompt (before extraction) for heartbeat indicators.
+ */
+export function isHeartbeatPrompt(prompt: string): boolean {
+  if (!prompt) return false;
+  if (prompt.includes("HEARTBEAT_OK")) return true;
+  if (/read\s+.*heartbeat/i.test(prompt)) return true;
+  if (/heartbeat\s*\.\s*md/i.test(prompt)) return true;
+  return false;
+}

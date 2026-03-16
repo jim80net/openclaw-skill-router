@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractUserMessage } from "../src/prompt-extractor.ts";
+import { extractUserMessage, isHeartbeatPrompt } from "../src/prompt-extractor.ts";
 
 describe("extractUserMessage", () => {
   it("returns empty string for empty input", () => {
@@ -134,5 +134,37 @@ lots of file content here that would dilute the embedding
 </file>`;
 
     expect(extractUserMessage(prompt)).toBe("analyze this");
+  });
+});
+
+describe("isHeartbeatPrompt", () => {
+  it("detects HEARTBEAT_OK", () => {
+    expect(isHeartbeatPrompt("HEARTBEAT_OK")).toBe(true);
+  });
+
+  it("detects read heartbeat instruction", () => {
+    expect(isHeartbeatPrompt("Please read the heartbeat status")).toBe(true);
+  });
+
+  it("detects heartbeat.md references", () => {
+    expect(isHeartbeatPrompt("Check heartbeat.md for status")).toBe(true);
+  });
+
+  it("detects heartbeat . md with spaces", () => {
+    expect(isHeartbeatPrompt("Check heartbeat . md")).toBe(true);
+  });
+
+  it("does not flag normal prompts", () => {
+    expect(isHeartbeatPrompt("how do I check the weather?")).toBe(false);
+    expect(isHeartbeatPrompt("my heart is beating fast")).toBe(false);
+  });
+
+  it("returns false for empty input", () => {
+    expect(isHeartbeatPrompt("")).toBe(false);
+  });
+
+  it("returns false for undefined-like input", () => {
+    expect(isHeartbeatPrompt(null as any)).toBe(false);
+    expect(isHeartbeatPrompt(undefined as any)).toBe(false);
   });
 });

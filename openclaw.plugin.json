@@ -2,67 +2,133 @@
   "id": "memex-openclaw",
   "name": "Memex OpenClaw",
   "description": "Memex skill/memory/rule router for OpenClaw — vector-based semantic injection with graduated disclosure, powered by @jim80net/memex-core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "enabled": { "type": "boolean", "default": false },
-      "topK": { "type": "number", "default": 3, "minimum": 1, "maximum": 10 },
-      "threshold": { "type": "number", "default": 0.35, "minimum": 0.0, "maximum": 1.0 },
+      "enabled": {
+        "type": "boolean",
+        "default": false
+      },
+      "topK": {
+        "type": "number",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 10
+      },
+      "threshold": {
+        "type": "number",
+        "default": 0.35,
+        "minimum": 0,
+        "maximum": 1
+      },
       "scoringMode": {
         "type": "string",
-        "enum": ["relative", "absolute"],
+        "enum": [
+          "relative",
+          "absolute"
+        ],
         "default": "relative",
         "description": "'relative': inject top-K if best score > threshold, drop results too far from best. 'absolute': each result must individually pass threshold."
       },
       "maxDropoff": {
         "type": "number",
-        "default": 0.10,
-        "minimum": 0.0,
-        "maximum": 1.0,
+        "default": 0.1,
+        "minimum": 0,
+        "maximum": 1,
         "description": "In relative mode, drop results scoring more than this below the best match"
       },
-      "embeddingModel": { "type": "string", "default": "Xenova/all-MiniLM-L6-v2" },
+      "embeddingModel": {
+        "type": "string",
+        "default": "Xenova/all-MiniLM-L6-v2"
+      },
       "embeddingBackend": {
         "type": "string",
-        "enum": ["openai", "local"],
+        "enum": [
+          "openai",
+          "local"
+        ],
         "default": "local",
         "description": "Embedding backend: 'openai' (requires OPENAI_API_KEY) or 'local' (ONNX via @huggingface/transformers)"
       },
-      "maxInjectedChars": { "type": "number", "default": 8000 },
-      "cacheTimeMs": { "type": "number", "default": 300000 },
+      "maxInjectedChars": {
+        "type": "number",
+        "default": 8000
+      },
+      "cacheTimeMs": {
+        "type": "number",
+        "default": 300000
+      },
       "skillDirs": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "description": "Additional skill directories to index (workspace skills/ is always included)"
       },
       "memoryDirs": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "description": "Directories to scan for memory .md files (## sections with optional Triggers: lines)"
       },
       "types": {
         "type": "array",
         "items": {
           "type": "string",
-          "enum": ["skill", "memory", "rule", "workflow", "tool-guidance", "session-learning", "stop-rule"]
+          "enum": [
+            "skill",
+            "memory",
+            "rule",
+            "workflow",
+            "tool-guidance",
+            "session-learning",
+            "stop-rule"
+          ]
         },
-        "default": ["skill", "memory", "workflow", "session-learning", "rule"],
+        "default": [
+          "skill",
+          "memory",
+          "workflow",
+          "session-learning",
+          "rule"
+        ],
         "description": "Knowledge types to include in routing"
       }
     }
   },
   "uiHints": {
-    "enabled": { "label": "Enable skill router" },
-    "topK": { "label": "Max skills to inject per turn" },
-    "threshold": { "label": "Floor score — best match must clear this (0-1)" },
-    "scoringMode": { "label": "Scoring mode (relative or absolute)" },
-    "maxDropoff": { "label": "Max score gap from best before dropping (relative mode)" },
-    "embeddingModel": { "label": "Embedding model" },
-    "embeddingBackend": { "label": "Embedding backend (openai or local)" },
-    "maxInjectedChars": { "label": "Max characters to inject" },
-    "memoryDirs": { "label": "Memory directories to scan (.md files)" },
-    "types": { "label": "Knowledge types to route" }
+    "enabled": {
+      "label": "Enable skill router"
+    },
+    "topK": {
+      "label": "Max skills to inject per turn"
+    },
+    "threshold": {
+      "label": "Floor score — best match must clear this (0-1)"
+    },
+    "scoringMode": {
+      "label": "Scoring mode (relative or absolute)"
+    },
+    "maxDropoff": {
+      "label": "Max score gap from best before dropping (relative mode)"
+    },
+    "embeddingModel": {
+      "label": "Embedding model"
+    },
+    "embeddingBackend": {
+      "label": "Embedding backend (openai or local)"
+    },
+    "maxInjectedChars": {
+      "label": "Max characters to inject"
+    },
+    "memoryDirs": {
+      "label": "Memory directories to scan (.md files)"
+    },
+    "types": {
+      "label": "Knowledge types to route"
+    }
   }
 }

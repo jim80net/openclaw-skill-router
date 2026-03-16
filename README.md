@@ -1,10 +1,24 @@
 # @jim80net/memex-openclaw
 
-**Teach your agent new tricks — without rewriting prompts.**
+Semantic skill, memory, and rule router for [OpenClaw](https://github.com/General-ML/openclaw). Injects relevant knowledge into your agent's session based on what it's actually working on, instead of loading everything at once.
 
-Memex OpenClaw is an [OpenClaw](https://github.com/General-ML/openclaw) plugin that gives your agent a long-term knowledge base. Write skills, memories, and rules as plain Markdown files, drop them in a folder, and the router automatically surfaces the right ones each turn using vector similarity. Core engine powered by [`@jim80net/memex-core`](https://github.com/jim80net/memex-core).
+Built on [`@jim80net/memex-core`](https://github.com/jim80net/memex-core) — the shared engine for embedding, indexing, and searching knowledge artifacts.
 
-No prompt engineering. No manual tool wiring. Just write what the agent should know, and the router handles the rest.
+## Why this exists
+
+AI coding assistants are essentially paint-by-number systems. You start with a canvas (the model) and a system prompt (the outline of the picture). Then you add your own directives — skills, memories, rules — which are like adding more lines to the coloring book before you begin.
+
+This works well at first. But as you accumulate knowledge — git workflows, ticket tracking conventions, deployment procedures, coding standards, domain-specific patterns — the coloring page gets crowded. Every session starts with *all* of this context loaded, whether it's relevant or not. The LLM's attention is split across git rules when you're debugging CSS, and deployment procedures when you're writing tests. Performance degrades as the corpus grows.
+
+The solution is **gradual disclosure**: start with universal principles only, then bring in additional directives at the point of consumption, when the conversation actually turns toward those specific tasks. When you need to trade a ticker, the relevant know-how appears. When you're deploying, the deployment checklist surfaces. When you're just writing code, nothing extra clutters the context.
+
+This is what memex-openclaw does. As skills, memories, and rules are created, they are embedded for semantic retrieval. Each type has a disclosure pattern suited to its nature:
+
+- **Skills** — large procedural checklists — are gradually disclosed: a description teaser first, then the full `SKILL.md` when the agent chooses to use it.
+- **Memories** — generally small preferences and facts — are disclosed in full at the moment they become relevant.
+- **Rules** — important guidelines — are disclosed in full when first relevant, then reduced to one-line reminders on subsequent matches, keeping them present without dominating the context.
+
+The result is a system that drives the conversation according to the task at hand. Performance stays consistent even as learnings amass, because the context window carries only what's needed right now.
 
 ## How it works
 

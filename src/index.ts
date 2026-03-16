@@ -1,12 +1,45 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
+import type { EmbeddingProvider, Logger, ScanDirs } from "@jim80net/memex-core";
+import {
+  InMemorySessionTracker,
+  LocalEmbeddingProvider,
+  OpenAIEmbeddingProvider,
+  SkillIndex,
+  TraceAccumulator,
+} from "@jim80net/memex-core";
 import manifest from "../openclaw.plugin.json" with { type: "json" };
+import type { SkillRouterConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import type { EmbeddingProvider } from "./embeddings.ts";
-import { LocalEmbeddingProvider, OpenAIEmbeddingProvider } from "./embeddings.ts";
 import { createRouter } from "./router.ts";
-import { SessionTracker } from "./session.ts";
-import { SkillIndex } from "./skill-index.ts";
-import { TraceAccumulator } from "./traces.ts";
-import type { PluginLogger } from "./types.ts";
+
+// ---------------------------------------------------------------------------
+// OpenClaw-specific paths
+// ---------------------------------------------------------------------------
+
+const OPENCLAW_DIR = join(homedir(), ".openclaw");
+const CACHE_DIR = join(OPENCLAW_DIR, "cache");
+const CACHE_PATH = join(CACHE_DIR, "skill-router.json");
+const TELEMETRY_PATH = join(CACHE_DIR, "skill-router-telemetry.json");
+const TRACES_DIR = join(CACHE_DIR, "skill-router-traces");
+const MODELS_DIR = join(CACHE_DIR, "models");
+const MANAGED_SKILLS_DIR = join(OPENCLAW_DIR, "workspace", "skills");
+
+// ---------------------------------------------------------------------------
+// ScanDirs builder
+// ---------------------------------------------------------------------------
+
+function buildScanDirs(workspaceDir: string, config: SkillRouterConfig): ScanDirs {
+  return {
+    skillDirs: [join(workspaceDir, "skills"), MANAGED_SKILLS_DIR, ...config.skillDirs],
+    memoryDirs: [...config.memoryDirs],
+    ruleDirs: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OpenClaw plugin API types
+// ---------------------------------------------------------------------------
 
 type OpenClawConfig = {
   workspace?: {
@@ -18,7 +51,7 @@ type OpenClawPluginApi = {
   id: string;
   config: OpenClawConfig;
   pluginConfig?: Record<string, unknown>;
-  logger: PluginLogger;
+  logger: Logger;
   on: (event: string, handler: (...args: unknown[]) => unknown, opts?: unknown) => void;
   registerService: (service: { id: string; start: () => Promise<void>; stop: () => void }) => void;
 };
@@ -115,7 +148,7 @@ export default function register(api: OpenClawPluginApi): void {
   const config = resolveConfig(api.pluginConfig);
 
   if (!config.enabled) {
-    api.logger.info("Skill router disabled");
+    api.logger.info("Memex disabled");
     return;
   }
 
@@ -125,22 +158,26 @@ export default function register(api: OpenClawPluginApi): void {
     const apiKey = process.env.OPENAI_API_KEY ?? "";
     if (!apiKey) {
       api.logger.warn(
-        "Skill router: openai backend selected but no OPENAI_API_KEY, falling back to local",
+        "Memex: openai backend selected but no OPENAI_API_KEY, falling back to local",
       );
-      provider = new LocalEmbeddingProvider(config.embeddingModel);
+      provider = new LocalEmbeddingProvider(config.embeddingModel, MODELS_DIR);
     } else {
       provider = new OpenAIEmbeddingProvider(config.embeddingModel, apiKey);
-      api.logger.info(`Skill router: using OpenAI embeddings (${config.embeddingModel})`);
+      api.logger.info(`Memex: using OpenAI embeddings (${config.embeddingModel})`);
     }
   } else {
-    provider = new LocalEmbeddingProvider(config.embeddingModel);
-    api.logger.info(`Skill router: using local ONNX embeddings (${config.embeddingModel})`);
+    provider = new LocalEmbeddingProvider(config.embeddingModel, MODELS_DIR);
+    api.logger.info(`Memex: using local ONNX embeddings (${config.embeddingModel})`);
   }
 
-  const index = new SkillIndex(config, provider);
-  const sessionTracker = new SessionTracker();
-  const traceAccumulator = new TraceAccumulator();
-  const router = createRouter(index, config, api.logger, sessionTracker, traceAccumulator);
+  const index = new SkillIndex(config, provider, CACHE_PATH);
+  const sessionTracker = new InMemorySessionTracker();
+  const traceAccumulator = new TraceAccumulator(TRACES_DIR);
+  const router = createRouter(index, config, api.logger, sessionTracker, {
+    traceAccumulator,
+    telemetryPath: TELEMETRY_PATH,
+    buildScanDirs: (workspaceDir) => buildScanDirs(workspaceDir, config),
+  });
 
   // --- Hook: before_prompt_build ---
   // Main hook: semantic skill routing per-turn
@@ -199,12 +236,12 @@ export default function register(api: OpenClawPluginApi): void {
       if (sections.length === 0) return undefined;
 
       api.logger.info(
-        `Skill router[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`,
+        `Memex[tool]: injected ${sections.length} guidance(s) for ${toolName} (${totalChars} chars)`,
       );
 
       return { prependContext: sections.join("\n\n---\n\n") };
     } catch (err) {
-      api.logger.warn(`Skill router[tool]: search failed: ${err}`);
+      api.logger.warn(`Memex[tool]: search failed: ${err}`);
       return undefined;
     }
   });
@@ -230,31 +267,31 @@ export default function register(api: OpenClawPluginApi): void {
       const trace = await traceAccumulator.finalize(sessionKey, outcome, endEvent.error);
       if (trace && trace.skillsInjected.length > 0) {
         api.logger.info(
-          `Skill router[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`,
+          `Memex[trace]: ${sessionKey} — ${trace.outcome}, skills=[${trace.skillsInjected.join(",")}], tools=${trace.toolsCalled.length}, msgs=${trace.messageCount}`,
         );
       }
     } catch (err) {
-      api.logger.warn(`Skill router[trace]: failed to finalize: ${err}`);
+      api.logger.warn(`Memex[trace]: failed to finalize: ${err}`);
     }
   });
 
   // --- Service: index builder ---
   api.registerService({
-    id: "skill-router-index",
+    id: "memex-openclaw-index",
     start: async () => {
       const workspaceDir = api.config?.workspace?.dir;
       if (workspaceDir) {
-        api.logger.info("Skill router: building initial index...");
+        api.logger.info("Memex: building initial index...");
         try {
-          await index.build(workspaceDir);
-          api.logger.info(`Skill router: indexed ${index.skillCount} skills`);
+          await index.build(buildScanDirs(workspaceDir, config));
+          api.logger.info(`Memex: indexed ${index.skillCount} skills`);
         } catch (err) {
-          api.logger.warn(`Skill router: failed to build initial index: ${err}`);
+          api.logger.warn(`Memex: failed to build initial index: ${err}`);
         }
       }
     },
     stop: () => {
-      api.logger.info("Skill router: stopped");
+      api.logger.info("Memex: stopped");
     },
   });
 
@@ -270,6 +307,6 @@ export default function register(api: OpenClawPluginApi): void {
   }
 
   api.logger.info(
-    `Skill router v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`,
+    `Memex v${manifest.version}: registered (before_prompt_build + before_tool_call + agent_end hooks)`,
   );
 }

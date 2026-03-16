@@ -1,10 +1,19 @@
+import type {
+  IndexedSkill,
+  Logger,
+  ScanDirs,
+  SkillIndex,
+  SkillSearchResult,
+} from "@jim80net/memex-core";
+import {
+  loadTelemetry,
+  recordMatch,
+  type SessionTracker,
+  saveTelemetry,
+  type TraceAccumulator,
+} from "@jim80net/memex-core";
 import type { SkillRouterConfig } from "./config.ts";
 import { extractUserMessage } from "./prompt-extractor.ts";
-import type { SessionTracker } from "./session.ts";
-import type { SkillIndex } from "./skill-index.ts";
-import { loadTelemetry, recordMatch, saveTelemetry } from "./telemetry.ts";
-import type { TraceAccumulator } from "./traces.ts";
-import type { IndexedSkill, PluginLogger, SkillSearchResult } from "./types.ts";
 
 type HookEvent = {
   prompt: string;
@@ -20,6 +29,12 @@ type HookContext = {
 };
 
 type HookResult = { prependContext: string } | undefined;
+
+type RouterOptions = {
+  traceAccumulator?: TraceAccumulator;
+  telemetryPath?: string;
+  buildScanDirs?: (workspaceDir: string) => ScanDirs;
+};
 
 // ---------------------------------------------------------------------------
 // Disclosure formatting
@@ -57,9 +72,9 @@ function formatSkillTeaser(skill: IndexedSkill, relevance: string): string {
 export function createRouter(
   index: SkillIndex,
   config: SkillRouterConfig,
-  logger: PluginLogger,
+  logger: Logger,
   sessionTracker: SessionTracker,
-  traceAccumulator?: TraceAccumulator,
+  options?: RouterOptions,
 ) {
   return async (event: HookEvent, context: HookContext): Promise<HookResult> => {
     if (!config.enabled) return undefined;
@@ -71,11 +86,11 @@ export function createRouter(
     if (userMessage.includes("HEARTBEAT_OK") || userMessage.length < 5) return undefined;
 
     // Rebuild index if stale
-    if (index.needsRebuild() && context.workspaceDir) {
+    if (index.needsRebuild() && context.workspaceDir && options?.buildScanDirs) {
       try {
-        await index.build(context.workspaceDir);
+        await index.build(options.buildScanDirs(context.workspaceDir));
       } catch (err) {
-        logger.warn(`Skill router: failed to build index: ${err}`);
+        logger.warn(`Memex: failed to build index: ${err}`);
         return undefined;
       }
     }
@@ -92,7 +107,7 @@ export function createRouter(
         config.maxDropoff,
       );
     } catch (err) {
-      logger.warn(`Skill router: search failed: ${err}`);
+      logger.warn(`Memex: search failed: ${err}`);
       return undefined;
     }
 
@@ -121,7 +136,7 @@ export function createRouter(
           try {
             content = await index.readSkillContent(skill.location);
           } catch (err) {
-            logger.warn(`Skill router: failed to read ${skill.location}: ${err}`);
+            logger.warn(`Memex: failed to read ${skill.location}: ${err}`);
             continue;
           }
           section = formatRule(skill, relevance, content, false);
@@ -135,7 +150,7 @@ export function createRouter(
         try {
           content = await index.readSkillContent(skill.location);
         } catch (err) {
-          logger.warn(`Skill router: failed to read ${skill.location}: ${err}`);
+          logger.warn(`Memex: failed to read ${skill.location}: ${err}`);
           continue;
         }
         section = formatMemory(skill, relevance, content);
@@ -170,17 +185,18 @@ export function createRouter(
     if (counts.memories > 0)
       parts.push(`${counts.memories} memor${counts.memories > 1 ? "ies" : "y"}`);
     logger.info(
-      `Skill router: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`,
+      `Memex: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`,
     );
 
     // Record telemetry (fire-and-forget)
-    if (sessionKey) {
-      loadTelemetry()
+    if (sessionKey && options?.telemetryPath) {
+      const telemetryPath = options.telemetryPath;
+      loadTelemetry(telemetryPath)
         .then((telemetry) => {
           for (const result of results) {
             recordMatch(telemetry, result.skill.location, sessionKey);
           }
-          return saveTelemetry(telemetry);
+          return saveTelemetry(telemetryPath, telemetry);
         })
         .catch(() => {
           // Telemetry is best-effort
@@ -188,8 +204,12 @@ export function createRouter(
     }
 
     // Record trace data
-    if (traceAccumulator && sessionKey) {
-      traceAccumulator.recordInjection(sessionKey, context.agentId ?? "unknown", injectedNames);
+    if (options?.traceAccumulator && sessionKey) {
+      options.traceAccumulator.recordInjection(
+        sessionKey,
+        context.agentId ?? "unknown",
+        injectedNames,
+      );
     }
 
     return { prependContext };

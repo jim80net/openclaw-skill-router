@@ -1,18 +1,19 @@
 {
-  "name": "@openclaw/skill-router",
+  "name": "@jim80net/memex-openclaw",
   "version": "0.5.0",
-  "description": "Vector-based skill router for OpenClaw — injects relevant skills per-turn using embedding similarity",
+  "description": "Memex skill/memory/rule router for OpenClaw — vector-based semantic injection powered by @jim80net/memex-core",
   "license": "MIT",
   "author": "General-ML",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/jim80net/openclaw-skill-router.git"
+    "url": "git+ssh://git@github.com/jim80net/memex-openclaw.git"
   },
-  "homepage": "https://github.com/jim80net/openclaw-skill-router#readme",
+  "homepage": "https://github.com/jim80net/memex-openclaw#readme",
   "bugs": {
-    "url": "https://github.com/jim80net/openclaw-skill-router/issues"
+    "url": "https://github.com/jim80net/memex-openclaw/issues"
   },
   "keywords": [
+    "memex",
     "openclaw",
     "plugin",
     "skill-router",
@@ -45,5 +46,8 @@
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.8.1"
+  },
+  "dependencies": {
+    "@jim80net/memex-core": "^0.2.3"
   }
 }

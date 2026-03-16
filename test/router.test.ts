@@ -146,7 +146,7 @@ describe("createRouter", () => {
       description: "Get weather forecasts",
       type: "skill",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.92 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.92, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("# Full body that should NOT appear"),
@@ -173,7 +173,7 @@ describe("createRouter", () => {
 
   it("injects skill teaser for type=workflow", async () => {
     const skill = makeSkill({ name: "deploy", description: "Deploy workflow", type: "workflow" });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.85 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.85, bestQueryIndex: 0 }];
     const index = makeIndex({ search: vi.fn().mockResolvedValue(matches) });
     const router = createRouter(
       index,
@@ -193,7 +193,7 @@ describe("createRouter", () => {
 
   it("injects full body for type=memory", async () => {
     const skill = makeSkill({ name: "pnpm-pref", description: "Use pnpm", type: "memory" });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.88 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.88, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Always use pnpm instead of npm."),
@@ -216,7 +216,7 @@ describe("createRouter", () => {
       description: "A correction",
       type: "session-learning",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.8 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.8, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Don't do X, do Y instead."),
@@ -244,7 +244,7 @@ describe("createRouter", () => {
       type: "rule",
       oneLiner: "Use pnpm, not npm.",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.9 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.9, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Always use pnpm for all package management."),
@@ -269,7 +269,7 @@ describe("createRouter", () => {
       type: "rule",
       oneLiner: "Use pnpm, not npm.",
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.9 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.9, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Full rule body."),
@@ -298,7 +298,7 @@ describe("createRouter", () => {
       type: "rule",
       // no oneLiner
     });
-    const matches: SkillSearchResult[] = [{ skill, score: 0.85 }];
+    const matches: SkillSearchResult[] = [{ skill, score: 0.85, bestQueryIndex: 0 }];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
       readSkillContent: vi.fn().mockResolvedValue("Full body."),
@@ -325,8 +325,16 @@ describe("createRouter", () => {
   it("respects maxInjectedChars limit and stops adding skills", async () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
-      { skill: makeSkill({ name: "skill-a", description: "A", type: "memory" }), score: 0.9 },
-      { skill: makeSkill({ name: "skill-b", description: "B", type: "memory" }), score: 0.8 },
+      {
+        skill: makeSkill({ name: "skill-a", description: "A", type: "memory" }),
+        score: 0.9,
+        bestQueryIndex: 0,
+      },
+      {
+        skill: makeSkill({ name: "skill-b", description: "B", type: "memory" }),
+        score: 0.8,
+        bestQueryIndex: 0,
+      },
     ];
 
     const bigContent = "x".repeat(5000);
@@ -355,9 +363,13 @@ describe("createRouter", () => {
   it("logs breakdown by type", async () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
-      { skill: makeSkill({ name: "r1", type: "rule", oneLiner: "rule" }), score: 0.9 },
-      { skill: makeSkill({ name: "m1", type: "memory" }), score: 0.85 },
-      { skill: makeSkill({ name: "s1", type: "skill" }), score: 0.8 },
+      {
+        skill: makeSkill({ name: "r1", type: "rule", oneLiner: "rule" }),
+        score: 0.9,
+        bestQueryIndex: 0,
+      },
+      { skill: makeSkill({ name: "m1", type: "memory" }), score: 0.85, bestQueryIndex: 0 },
+      { skill: makeSkill({ name: "s1", type: "skill" }), score: 0.8, bestQueryIndex: 0 },
     ];
     const index = makeIndex({
       search: vi.fn().mockResolvedValue(matches),
@@ -423,10 +435,15 @@ describe("createRouter", () => {
   it("skips unreadable memory files and continues", async () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
-      { skill: makeSkill({ name: "bad", type: "memory", location: "/bad/SKILL.md" }), score: 0.9 },
+      {
+        skill: makeSkill({ name: "bad", type: "memory", location: "/bad/SKILL.md" }),
+        score: 0.9,
+        bestQueryIndex: 0,
+      },
       {
         skill: makeSkill({ name: "good", type: "memory", location: "/good/SKILL.md" }),
         score: 0.85,
+        bestQueryIndex: 0,
       },
     ];
 
@@ -454,7 +471,7 @@ describe("createRouter", () => {
   it("returns undefined when all reads fail", async () => {
     const logger = makeLogger();
     const matches: SkillSearchResult[] = [
-      { skill: makeSkill({ name: "bad", type: "memory" }), score: 0.9 },
+      { skill: makeSkill({ name: "bad", type: "memory" }), score: 0.9, bestQueryIndex: 0 },
     ];
 
     const index = makeIndex({
@@ -483,6 +500,40 @@ describe("createRouter", () => {
     );
 
     const result = await router({ prompt: "HEARTBEAT_OK", messages: [] }, BASE_CONTEXT);
+    expect(result).toBeUndefined();
+    expect(index.search).not.toHaveBeenCalled();
+  });
+
+  it("skips heartbeat prompts with 'read heartbeat' pattern", async () => {
+    const index = makeIndex();
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
+
+    const result = await router(
+      { prompt: "Please read the heartbeat status", messages: [] },
+      BASE_CONTEXT,
+    );
+    expect(result).toBeUndefined();
+    expect(index.search).not.toHaveBeenCalled();
+  });
+
+  it("skips heartbeat.md reference prompts", async () => {
+    const index = makeIndex();
+    const router = createRouter(
+      index,
+      { ...DEFAULT_CONFIG, enabled: true },
+      makeLogger(),
+      sessionTracker,
+    );
+
+    const result = await router(
+      { prompt: "Check heartbeat.md for status", messages: [] },
+      BASE_CONTEXT,
+    );
     expect(result).toBeUndefined();
     expect(index.search).not.toHaveBeenCalled();
   });

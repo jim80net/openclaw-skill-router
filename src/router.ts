@@ -9,7 +9,7 @@ import type {
 } from "@jim80net/memex-core";
 import { loadTelemetry, recordMatch, saveTelemetry } from "@jim80net/memex-core";
 import type { SkillRouterConfig } from "./config.ts";
-import { extractUserMessage } from "./prompt-extractor.ts";
+import { extractUserMessage, isHeartbeatPrompt } from "./prompt-extractor.ts";
 
 export type HookEvent = {
   prompt: string;
@@ -79,7 +79,7 @@ export function createRouter(
     const userMessage = extractUserMessage(event.prompt);
 
     // Skip heartbeat turns and empty messages
-    if (userMessage.includes("HEARTBEAT_OK") || userMessage.length < 5) return undefined;
+    if (isHeartbeatPrompt(event.prompt) || userMessage.length < 5) return undefined;
 
     // Rebuild index if stale
     if (index.needsRebuild() && context.workspaceDir && options?.buildScanDirs) {
@@ -116,7 +116,7 @@ export function createRouter(
     let totalChars = 0;
     const sections: string[] = [];
     const counts = { rules: 0, memories: 0, skills: 0 };
-    const injectedNames: string[] = [];
+    const injectedResults: Array<{ location: string; bestQueryIndex: number; name: string }> = [];
 
     for (const result of results) {
       const { skill, score } = result;
@@ -159,7 +159,11 @@ export function createRouter(
       if (totalChars + section.length > config.maxInjectedChars) break;
 
       sections.push(section);
-      injectedNames.push(skill.name);
+      injectedResults.push({
+        location: skill.location,
+        bestQueryIndex: result.bestQueryIndex,
+        name: skill.name,
+      });
       totalChars += section.length;
     }
 
@@ -184,13 +188,13 @@ export function createRouter(
       `Memex: injected ${parts.join(" + ")} (${totalChars} chars) for: ${JSON.stringify(userMessage.slice(0, 80))}`,
     );
 
-    // Record telemetry (fire-and-forget)
-    if (sessionKey && options?.telemetryPath) {
+    // Record telemetry only for injected results (fire-and-forget)
+    if (sessionKey && options?.telemetryPath && injectedResults.length > 0) {
       const telemetryPath = options.telemetryPath;
       loadTelemetry(telemetryPath)
         .then((telemetry) => {
-          for (const result of results) {
-            recordMatch(telemetry, result.skill.location, sessionKey);
+          for (const { location, bestQueryIndex } of injectedResults) {
+            recordMatch(telemetry, location, sessionKey, bestQueryIndex);
           }
           return saveTelemetry(telemetryPath, telemetry);
         })
@@ -204,7 +208,7 @@ export function createRouter(
       options.traceAccumulator.recordInjection(
         sessionKey,
         context.agentId ?? "unknown",
-        injectedNames,
+        injectedResults.map((r) => r.name),
       );
     }
 

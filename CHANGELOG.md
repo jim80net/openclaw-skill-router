@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/jim80net/memex-openclaw/compare/v0.6.0...v0.7.0) (2026-03-17)
+
+
+### Features
+
+* heartbeat detection + query attribution ([730ada9](https://github.com/jim80net/memex-openclaw/commit/730ada913f02f3f0f078dbfbf8d1c502f2f47fd5))
+* heartbeat detection + query attribution ([76ce991](https://github.com/jim80net/memex-openclaw/commit/76ce991da27a7bc4991e2cc841bb867ea4efa539))
+
+
+### Bug Fixes
+
+* regenerate pnpm-lock.yaml for pnpm 10 compatibility ([f6ca59f](https://github.com/jim80net/memex-openclaw/commit/f6ca59fe872947ac5d4f8baf4d628626b7f16a54))
+
 ## [0.6.0](https://github.com/jim80net/memex-openclaw/compare/v0.5.0...v0.6.0) (2026-03-16)
 
 

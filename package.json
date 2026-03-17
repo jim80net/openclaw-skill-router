@@ -48,6 +48,6 @@
     "@huggingface/transformers": "^3.8.1"
   },
   "dependencies": {
-    "@jim80net/memex-core": "^0.3.0"
+    "@jim80net/memex-core": "^0.3.1"
   }
 }

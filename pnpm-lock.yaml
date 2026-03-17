@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@jim80net/memex-core':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.3.1
+        version: 0.3.1
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.7
@@ -264,8 +264,8 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
-  '@jim80net/memex-core@0.3.0':
-    resolution: {integrity: sha512-cIWbzhKxdM1Xdz4xqKcJk1mcYh5Yeg9Hz+t5Ol9sHHTWNDansIJ2gIKgkw0R8v4GGUf81TVAu+UfDrp4TNKv0A==}
+  '@jim80net/memex-core@0.3.1':
+    resolution: {integrity: sha512-zOmqxMoSohuSS3ozKyQoKqowXwvF5KjEVw8qAuAHWJ1DwKPLsprXqeWokW0LXKAe89FPx3A0wIyKI7UbZEr/Ig==}
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -1072,7 +1072,7 @@ snapshots:
       minipass: 7.1.3
     optional: true
 
-  '@jim80net/memex-core@0.3.0':
+  '@jim80net/memex-core@0.3.1':
     optionalDependencies:
       '@huggingface/transformers': 3.8.1
 

@@ -1,6 +1,6 @@
 {
   "name": "@jim80net/memex-openclaw",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Memex skill/memory/rule router for OpenClaw — vector-based semantic injection powered by @jim80net/memex-core",
   "license": "MIT",
   "author": "General-ML",

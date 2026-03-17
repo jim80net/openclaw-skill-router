@@ -91,6 +91,58 @@ queries:             # extra embedding vectors for better matching
 ---
 ```
 
+## Multi-agent shared memory
+
+In multi-agent deployments, each agent has its own workspace with local skills and memories. But some knowledge is cross-cutting — market regime changes, macro events, portfolio-wide decisions, active theories. These are **memes** in the original Dawkins sense: units of cultural information that propagate across agents.
+
+The shared memory pattern uses the filesystem as the access control boundary:
+
+```
+~/.openclaw/
+  workspace/memory/          ← main agent's private memory
+  workspace-research/memory/ ← research agent's private memory
+  workspace-grandma/memory/  ← grandma's private memory (account numbers stay here)
+  shared/                    ← global knowledge (all agents read + write)
+```
+
+Configure `memoryDirs` to include both local and shared paths:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "memex-openclaw": {
+        "config": {
+          "memoryDirs": ["/home/you/.openclaw/shared"]
+        }
+      }
+    }
+  }
+}
+```
+
+Every agent with memex enabled will index and search the shared directory alongside their workspace skills. The key properties:
+
+- **Local by default, shared by address.** Writing to `memory/foo.md` is local. Writing to `~/.openclaw/shared/` requires a deliberate path. You don't accidentally publish.
+- **No classification needed.** The directory topology _is_ the access control. Private data stays in workspace-local memory. No rules engine, no content filter, no "is this sensitive?" heuristic.
+- **Decoupled in time.** Agent A writes a fact. Agent B finds it via semantic search whenever it becomes relevant — minutes, hours, or days later. No synchronous coordination required.
+- **Same index, same search.** Shared entries are just memory entries with a different origin. The embedding/search/inject pipeline doesn't change.
+
+### What belongs in shared
+
+- Market regime state (risk-on/off, volatility regime)
+- Macro events affecting multiple agents
+- Portfolio-wide decisions ("all flat, no new positions")
+- Active high-confidence theories from world models
+- Cross-cutting operational decisions
+
+### What stays local
+
+- Account numbers, credentials, personal info
+- Agent-specific operational state
+- Work in progress
+- Anything only one agent needs
+
 ## Configuration
 
 All settings live under `plugins.entries.memex-openclaw.config` in your OpenClaw config:
